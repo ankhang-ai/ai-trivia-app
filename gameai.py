@@ -5,7 +5,7 @@ from gtts import gTTS
 import io
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="AI Trivia Learning App-by TDQ", page_icon="🧠", layout="centered")
 
 # Lấy API Key an toàn từ st.secrets
 api_key = None
