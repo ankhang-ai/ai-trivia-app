@@ -47,6 +47,8 @@ if "answered" not in st.session_state:
     st.session_state.answered = False
 if "selected_choice" not in st.session_state:
     st.session_state.selected_choice = None
+if "is_correct" not in st.session_state:
+    st.session_state.is_correct = None
 
 # Giao diện tiêu đề
 st.title("🧠 AI Trivia Learning App")
@@ -77,7 +79,7 @@ if start_btn and topic:
             }}
             """
             response = client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
             )
             
@@ -96,6 +98,7 @@ if start_btn and topic:
                 st.session_state.game_started = True
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
+                st.session_state.is_correct = None
                 st.rerun()
         except Exception as e:
             st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
@@ -122,7 +125,14 @@ if st.session_state.game_started and st.session_state.questions:
             
         st.write("")
         
-        selected = st.radio("Chọn đáp án của bạn:", options, key=f"q_{idx}", index=None if not st.session_state.answered else options.index(st.session_state.selected_choice) if st.session_state.selected_choice in options else 0)
+        # Vô hiệu hóa radio khi đã trả lời để người dùng thấy đáp án cố định
+        selected = st.radio(
+            "Chọn đáp án của bạn:", 
+            options, 
+            key=f"q_{idx}", 
+            index=None if not st.session_state.answered else options.index(st.session_state.selected_choice) if st.session_state.selected_choice in options else 0,
+            disabled=st.session_state.answered
+        )
         
         col_sub, col_next = st.columns([1, 1])
         
@@ -135,24 +145,29 @@ if st.session_state.game_started and st.session_state.questions:
                         
                         if selected == current_data["answer"]:
                             st.session_state.score += 1
-                            st.success("🎉 Chính xác tuyệt vời!")
-                            # Phát âm thanh đúng bằng HTML audio
-                            st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/success-1-6289.mp3](https://www.myinstants.com/media/sounds/success-1-6289.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
+                            st.session_state.is_correct = True
                         else:
-                            st.error(f"❌ Chưa chính xác! Đáp án đúng là: **{current_data['answer']}**")
-                            # Phát âm thanh sai bằng HTML audio
-                            st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
+                            st.session_state.is_correct = False
                         st.rerun()
                     else:
                         st.warning("Vui lòng chọn một đáp án trước khi xác nhận!")
         
+        # Hiển thị kết quả đúng/sai cố định sau khi đã bấm xác nhận
         if st.session_state.answered:
+            if st.session_state.is_correct:
+                st.success("🎉 Chính xác tuyệt vời!")
+                st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/success-1-6289.mp3](https://www.myinstants.com/media/sounds/success-1-6289.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
+            else:
+                st.error(f"❌ Chưa chính xác! Đáp án đúng là: **{current_data['answer']}**")
+                st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
+            
             with col_next:
                 if idx < len(q_list) - 1:
                     if st.button("➡️ Câu hỏi tiếp theo"):
                         st.session_state.current_q += 1
                         st.session_state.answered = False
                         st.session_state.selected_choice = None
+                        st.session_state.is_correct = None
                         st.rerun()
                 else:
                     if st.button("🏆 Xem kết quả chung cuộc"):
@@ -169,6 +184,7 @@ if st.session_state.game_started and st.session_state.questions:
             st.session_state.current_q = 0
             st.session_state.score = 0
             st.session_state.answered = False
+            st.session_state.is_correct = None
             st.rerun()
 
 # Nhạc nền nhẹ nhàng chạy ngầm
