@@ -3,7 +3,7 @@ import streamlit as st
 from google import genai
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="AI Trivia Learning", page_icon="🧠")
+st.set_page_config(page_title="GAME HỌC& LUYỆN KIẾN THỨC BẰNG AI-By TDQ", page_icon="🧠")
 
 # Lấy API Key an toàn: Tự động đọc từ đám mây hoặc cho phép nhập
 api_key = None
@@ -57,8 +57,8 @@ def fetch_questions_from_ai(topic, key):
     return []
 
 
-st.title("🧠 AI Trivia Learning App")
-st.write("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn!")
+st.title("🧠 GAME HỌC& LUYỆN KIẾN THỨC BẰNG AI-By TDQ")
+st.write("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn!-by TDQ")
 
 # Nếu chưa có khóa ngầm trên mây thì hiện ô cho phép nhập
 if not api_key:
