@@ -77,7 +77,7 @@ if start_btn and topic:
             }}
             """
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-3.6-flash",
                 contents=prompt,
             )
             
