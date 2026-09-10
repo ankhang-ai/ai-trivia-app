@@ -111,7 +111,11 @@ if start_btn and topic:
                 st.session_state.is_correct = None
                 st.rerun()
         except Exception as e:
-            st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                st.error("⚠️ Bạn đã dùng hết hạn mức miễn phí (Free Tier quota) của API Key này trong ngày. Vui lòng tạo một API Key mới trên Google AI Studio để tiếp tục!")
+            else:
+                st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
 
 # Tiến hành chơi game nếu đã có câu hỏi
 if st.session_state.game_started and st.session_state.questions:
