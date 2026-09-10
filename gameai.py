@@ -5,7 +5,7 @@ from gtts import gTTS
 import io
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="AI Trivia Learning App-by TDQ", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
 
 # Lấy API Key an toàn từ st.secrets
 api_key = None
@@ -70,7 +70,7 @@ with col1:
     start_btn = st.button("🚀 Bắt đầu học")
 
 if start_btn and topic:
-    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi kèm hình ảnh thú vị cho bạn..."):
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi kèm từ khóa hình ảnh cho bạn..."):
         try:
             prompt = f"""
             Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
@@ -79,7 +79,7 @@ if start_btn and topic:
               "question": "Nội dung câu hỏi?",
               "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
               "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
-              "image_url": "Đường link URL hình ảnh công khai (Unsplash, Wikimedia hoặc ảnh minh họa chuẩn xác) liên quan trực tiếp đến câu hỏi này (nếu không có ảnh phù hợp, để trống chuỗi \"\")"
+              "keyword": "Từ khóa tiếng Anh ngắn gọn để tìm kiếm hình ảnh minh họa cho câu hỏi này (ví dụ: Nepal flag, Albert Einstein, Eiffel tower)"
             }}
             """
             response = client.models.generate_content(
@@ -120,14 +120,16 @@ if st.session_state.game_started and st.session_state.questions:
         
         question_text = current_data["question"]
         options = current_data["options"]
-        image_url = current_data.get("image_url", "")
+        keyword = current_data.get("keyword", topic)
         
         st.markdown(f"### {question_text}")
         
-        # Hiển thị hình ảnh minh họa nếu AI cung cấp đường link hợp lệ
-        if image_url and image_url.startswith("http"):
+        # Hiển thị hình ảnh minh họa động thông qua nguồn ảnh chất lượng cao (Unsplash Source theo từ khóa)
+        if keyword:
+            formatted_kw = keyword.replace(" ", ",")
+            img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
             try:
-                st.image(image_url, use_column_width=True)
+                st.image(img_source, use_column_width=True, caption=f"Minh họa: {keyword}")
             except Exception:
                 pass
         
