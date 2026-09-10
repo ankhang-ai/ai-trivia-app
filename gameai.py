@@ -5,7 +5,7 @@ from gtts import gTTS
 import io
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="AI Trivia Learning App-by TDQ", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
 
 # Lấy API Key an toàn từ st.secrets
 api_key = None
@@ -51,8 +51,8 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 # Giao diện tiêu đề
-st.title("🧠 AI Trivia Learning App-by TDQ")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh sinh động!-by TDQ")
+st.title("🧠 AI Trivia Learning App by TDQ")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh và hình ảnh sinh động!")
 
 # Kiểm tra API Key
 if not api_key:
@@ -60,7 +60,7 @@ if not api_key:
     st.stop()
 
 # Nhập chủ đề học tập
-topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Lịch sử Việt Nam, Kinh tế vĩ mô, Ngữ pháp tiếng Nhật...")
+topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Động vật hoang dã...")
 
 # Cho phép người dùng tự nhập số lượng câu hỏi tùy ý
 num_q = st.number_input("Nhập số lượng câu hỏi muốn thử thách:", min_value=1, value=5, step=1)
@@ -70,7 +70,7 @@ with col1:
     start_btn = st.button("🚀 Bắt đầu học")
 
 if start_btn and topic:
-    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi thú vị cho bạn..."):
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi kèm hình ảnh thú vị cho bạn..."):
         try:
             prompt = f"""
             Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
@@ -78,7 +78,8 @@ if start_btn and topic:
             {{
               "question": "Nội dung câu hỏi?",
               "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
-              "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên"
+              "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
+              "image_url": "Đường link URL hình ảnh công khai (Unsplash, Wikimedia hoặc ảnh minh họa chuẩn xác) liên quan trực tiếp đến câu hỏi này (nếu không có ảnh phù hợp, để trống chuỗi \"\")"
             }}
             """
             response = client.models.generate_content(
@@ -119,8 +120,16 @@ if st.session_state.game_started and st.session_state.questions:
         
         question_text = current_data["question"]
         options = current_data["options"]
+        image_url = current_data.get("image_url", "")
         
         st.markdown(f"### {question_text}")
+        
+        # Hiển thị hình ảnh minh họa nếu AI cung cấp đường link hợp lệ
+        if image_url and image_url.startswith("http"):
+            try:
+                st.image(image_url, use_column_width=True)
+            except Exception:
+                pass
         
         full_doc_text = f"Câu hỏi {idx + 1}: {question_text}. Các đáp án là: A. {options[0]}, B. {options[1]}, C. {options[2]}, D. {options[3]}"
         if st.button("🔊 Nghe đọc câu hỏi & đáp án"):
@@ -131,7 +140,6 @@ if st.session_state.game_started and st.session_state.questions:
         
         # Hiển thị các đáp án bằng các nút bấm để click trực tiếp
         for opt in options:
-            # Nếu đã trả lời rồi thì khóa các nút lại, tô màu hoặc hiển thị trạng thái
             if st.button(opt, key=f"btn_{idx}_{opt}", disabled=st.session_state.answered, use_container_width=True):
                 st.session_state.answered = True
                 st.session_state.selected_choice = opt
