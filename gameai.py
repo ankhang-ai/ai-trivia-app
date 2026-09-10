@@ -60,20 +60,26 @@ if not api_key:
     st.stop()
 
 # Nhập chủ đề học tập
-topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Kinh tế vĩ mô...")
+topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Tiếng Anh cơ bản...")
 
-# Cho phép người dùng tự nhập số lượng câu hỏi tùy ý
-num_q = st.number_input("Nhập số lượng câu hỏi muốn thử thách:", min_value=1, value=5, step=1)
+# Tùy chọn cấp độ khó dễ và số lượng câu hỏi
+col_a, col_b = st.columns(2)
+with col_a:
+    difficulty = st.selectbox(
+        "Chọn cấp độ khó:",
+        ["Dễ (Cơ bản, phù hợp cho trẻ em/mới học)", "Trung bình (Hiểu biết chung)", "Khó (Nâng cao, chuyên sâu, đánh đố)"]
+    )
+with col_b:
+    num_q = st.number_input("Số lượng câu hỏi:", min_value=1, value=5, step=1)
 
-col1, col2 = st.columns([1, 4])
-with col1:
-    start_btn = st.button("🚀 Bắt đầu học")
+start_btn = st.button("🚀 Bắt đầu học", type="primary")
 
 if start_btn and topic:
-    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi thông minh cho bạn..."):
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' cho bạn..."):
         try:
             prompt = f"""
             Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
+            Cấp độ khó của câu hỏi: {difficulty}.
             Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
             {{
               "question": "Nội dung câu hỏi?",
@@ -124,7 +130,7 @@ if st.session_state.game_started and st.session_state.questions:
         
         st.markdown(f"### {question_text}")
         
-        # CHỈ HIỂN THỊ HÌNH ẢNH NẾU AI XÁC ĐỊNH CÂU HỎI ĐÓ CẦN MINH HỌA (có keyword)
+        # Chỉ hiển thị hình ảnh nếu câu hỏi thực sự cần minh họa
         if keyword:
             formatted_kw = keyword.replace(" ", ",")
             img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
