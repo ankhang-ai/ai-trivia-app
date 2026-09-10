@@ -5,7 +5,7 @@ from gtts import gTTS
 import io
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="AI Trivia Learning App-by TDQ", page_icon="🧠", layout="centered")
 
 # Lấy API Key an toàn từ st.secrets
 api_key = None
@@ -51,8 +51,8 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 # Giao diện tiêu đề
-st.title("🧠 AI Trivia Learning App")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh sinh động!")
+st.title("🧠 AI Trivia Learning App-by TDQ")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh sinh động!-by TDQ")
 
 # Kiểm tra API Key
 if not api_key:
