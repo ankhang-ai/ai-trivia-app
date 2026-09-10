@@ -62,15 +62,18 @@ if not api_key:
 # Nhập chủ đề học tập
 topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Lịch sử Việt Nam, Kinh tế vĩ mô, Ngữ pháp tiếng Nhật...")
 
+# Thanh trượt chọn số lượng câu hỏi tùy ý (từ 3 đến 20 câu)
+num_q = st.slider("Chọn số lượng câu hỏi muốn thử thách:", min_value=3, max_value=20, value=5, step=1)
+
 col1, col2 = st.columns([1, 4])
 with col1:
     start_btn = st.button("🚀 Bắt đầu học")
 
 if start_btn and topic:
-    with st.spinner("AI đang soạn bộ câu hỏi thú vị cho bạn..."):
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi thú vị cho bạn..."):
         try:
             prompt = f"""
-            Tạo 5 câu hỏi trắc nghiệm về chủ đề: '{topic}'.
+            Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
             Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
             {{
               "question": "Nội dung câu hỏi?",
@@ -125,7 +128,6 @@ if st.session_state.game_started and st.session_state.questions:
             
         st.write("")
         
-        # Vô hiệu hóa radio khi đã trả lời để người dùng thấy đáp án cố định
         selected = st.radio(
             "Chọn đáp án của bạn:", 
             options, 
@@ -152,7 +154,6 @@ if st.session_state.game_started and st.session_state.questions:
                     else:
                         st.warning("Vui lòng chọn một đáp án trước khi xác nhận!")
         
-        # Hiển thị kết quả đúng/sai cố định sau khi đã bấm xác nhận
         if st.session_state.answered:
             if st.session_state.is_correct:
                 st.success("🎉 Chính xác tuyệt vời!")
