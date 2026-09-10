@@ -1,138 +1,185 @@
 import json
 import streamlit as st
 from google import genai
+from gtts import gTTS
+import io
 
 # Cấu hình trang Streamlit
-st.set_page_config(page_title="GAME HỌC& LUYỆN KIẾN THỨC BẰNG AI-By TDQ", page_icon="🧠")
+st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
 
-# Lấy API Key an toàn: Tự động đọc từ đám mây hoặc cho phép nhập
+# Lấy API Key an toàn từ st.secrets
 api_key = None
 try:
-  if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"]
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
-  pass
+    pass
+
+# Khởi tạo client Gemini (sử dụng cú pháp mới của google-genai)
+client = None
+if api_key:
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception as e:
+        st.error(f"Lỗi khởi tạo Gemini Client: {e}")
+
+# Hàm chuyển văn bản thành giọng nói tiếng Việt
+def speak_text(text):
+    try:
+        tts = gTTS(text=text, lang="vi")
+        audio_bytes = io.BytesIO()
+        tts.write_to_fp(audio_bytes)
+        audio_bytes.seek(0)
+        st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+    except Exception as e:
+        pass
 
 # Khởi tạo trạng thái game
 if "questions" not in st.session_state:
-  st.session_state.questions = []
+    st.session_state.questions = []
 if "current_q" not in st.session_state:
-  st.session_state.current_q = 0
+    st.session_state.current_q = 0
 if "score" not in st.session_state:
-  st.session_state.score = 0
+    st.session_state.score = 0
 if "game_started" not in st.session_state:
-  st.session_state.game_started = False
+    st.session_state.game_started = False
 if "answered" not in st.session_state:
-  st.session_state.answered = False
-if "selected_option" not in st.session_state:
-  st.session_state.selected_option = None
+    st.session_state.answered = False
+if "selected_choice" not in st.session_state:
+    st.session_state.selected_choice = None
 
+# Giao diện tiêu đề
+st.title("🧠 AI Trivia Learning App")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh sinh động!")
 
-def fetch_questions_from_ai(topic, key):
-  try:
-    client = genai.Client(api_key=key)
-    prompt = (
-        "Hãy tạo 5 câu hỏi trắc nghiệm về chủ đề: "
-        + topic
-        + ". "
-        "Yêu cầu trả về định dạng JSON thuần túy (không kèm markdown như ```json), là một mảng gồm các đối tượng với cấu trúc: "
-        '[{"question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0, "explanation": "..."}]'
-        " Trong đó correct_index là số từ 0 đến 3 ứng với đáp án đúng."
-    )
-
-    response = client.models.generate_content(
-        model="gemini-3.6-flash", contents=prompt
-    )
-
-    raw_text = response.text.strip()
-    if raw_text.startswith("```"):
-      raw_text = raw_text.split("```")[1]
-      if raw_text.startswith("json"):
-        raw_text = raw_text[4:]
-    raw_text = raw_text.strip()
-
-    return json.loads(raw_text)
-  except Exception as e:
-    st.error(f"Lỗi: {e}")
-    return []
-
-
-st.title("🧠 GAME HỌC& LUYỆN KIẾN THỨC BẰNG AI-By TDQ")
-st.write("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn!-by TDQ")
-
-# Nếu chưa có khóa ngầm trên mây thì hiện ô cho phép nhập
+# Kiểm tra API Key
 if not api_key:
-  api_key = st.text_input("Nhập Gemini API Key của bạn:", type="password")
+    st.warning("⚠️ Chưa tìm thấy `GEMINI_API_KEY` trong Streamlit Secrets. Vui lòng cấu hình trong phần Advanced settings!")
+    st.stop()
 
-if not api_key:
-  st.warning("⚠️ Vui lòng cung cấp API Key để tiếp tục!")
-else:
-  if not st.session_state.game_started:
-    topic_input = st.text_input(
-        "Nhập chủ đề bạn muốn học:",
-        placeholder=(
-            "Ví dụ: Lịch sử Việt Nam, Kinh tế vĩ mô, Ngữ pháp tiếng Nhật..."
-        ),
-    )
+# Nhập chủ đề học tập
+topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Lịch sử Việt Nam, Kinh tế vĩ mô, Ngữ pháp tiếng Nhật...")
 
-    if st.button("🚀 Bắt đầu học"):
-      if not topic_input:
-        st.warning("Vui lòng nhập chủ đề!")
-      else:
-        with st.spinner("AI đang tìm kiếm và biên soạn câu hỏi..."):
-          questions = fetch_questions_from_ai(topic_input, api_key)
-          if questions:
-            st.session_state.questions = questions
+col1, col2 = st.columns([1, 4])
+with col1:
+    start_btn = st.button("🚀 Bắt đầu học")
+
+if start_btn and topic:
+    with st.spinner("AI đang soạn bộ câu hỏi thú vị cho bạn..."):
+        try:
+            # Yêu cầu Gemini tạo 5 câu hỏi trắc nghiệm dưới dạng JSON
+            prompt = f"""
+            Tạo 5 câu hỏi trắc nghiệm về chủ đề: '{topic}'.
+            Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
+            {{
+              "question": "Nội dung câu hỏi?",
+              "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+              "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên"
+            }}
+            """
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            
+            # Làm sạch dữ liệu trả về từ AI
+            raw_text = response.text.strip()
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            
+            questions = json.loads(raw_text.strip())
+            
+            if questions:
+                st.session_state.questions = questions
+                st.session_state.current_q = 0
+                st.session_state.score = 0
+                st.session_state.game_started = True
+                st.session_state.answered = False
+                st.session_state.selected_choice = None
+                st.rerun()
+        except Exception as e:
+            st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
+
+# Tiến hành chơi game nếu đã có câu hỏi
+if st.session_state.game_started and st.session_state.questions:
+    q_list = st.session_state.questions
+    idx = st.session_state.current_q
+    
+    if idx < len(q_list):
+        current_data = q_list[idx]
+        
+        st.divider()
+        st.subheader(f"📌 Câu hỏi {idx + 1} / {len(q_list)}")
+        
+        question_text = current_data["question"]
+        options = current_data["options"]
+        
+        # Hiển thị câu hỏi
+        st.markdown(f"### {question_text}")
+        
+        # Nút đọc câu hỏi và đáp án bằng giọng nói
+        full_doc_text = f"Câu hỏi {idx + 1}: {question_text}. Các đáp án là: A. {options[0]}, B. {options[1]}, C. {options[2]}, D. {options[3]}"
+        if st.button("🔊 Nghe đọc câu hỏi & đáp án"):
+            speak_text(full_doc_text)
+            
+        st.write("")
+        
+        # Hiển thị các lựa chọn trắc nghiệm
+        selected = st.radio("Chọn đáp án của bạn:", options, key=f"q_{idx}", index=None if not st.session_state.answered else options.index(st.session_state.selected_choice) if st.session_state.selected_choice in options else 0)
+        
+        col_sub, col_next = st.columns([1, 1])
+        
+        with col_sub:
+            if not st.session_state.answered:
+                if st.button("✨ Xác nhận đáp án"):
+                    if selected:
+                        st.session_state.answered = True
+                        st.session_state.selected_choice = selected
+                        
+                        # Kiểm tra đúng/sai và phát âm thanh hiệu ứng tương ứng
+                        if selected == current_data["answer"]:
+                            st.session_state.score += 1
+                            st.success("🎉 Chính xác tuyệt vời!")
+                            # Phát âm thanh đúng
+                            st.audio("[https://www.myinstants.com/media/sounds/success-1-6289.mp3](https://www.myinstants.com/media/sounds/success-1-6289.mp3)", autoplay=True)
+                        else:
+                            st.error(f"❌ Chưa chính xác! Đáp án đúng là: **{current_data['answer']}**")
+                            # Phát âm thanh sai
+                            st.audio("[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)", autoplay=True)
+                        st.rerun()
+                    else:
+                        st.warning("Vui lòng chọn một đáp án trước khi xác nhận!")
+        
+        if st.session_state.answered:
+            with col_next:
+                if idx < len(q_list) - 1:
+                    if st.button("➡️ Câu hỏi tiếp theo"):
+                        st.session_state.current_q += 1
+                        st.session_state.answered = False
+                        st.session_state.selected_choice = None
+                        st.rerun()
+                else:
+                    if st.button("🏆 Xem kết quả chung cuộc"):
+                        st.session_state.current_q += 1
+                        st.rerun()
+    else:
+        st.success("🎉 Chúc mừng bạn đã hoàn thành xong bộ câu hỏi!")
+        st.balloons()
+        st.metric(label="Tổng số điểm của bạn", value=f"{st.session_state.score} / {len(q_list)}")
+        
+        if st.button("🔄 Chơi lại chủ đề mới"):
+            st.session_state.game_started = False
+            st.session_state.questions = []
             st.session_state.current_q = 0
             st.session_state.score = 0
-            st.session_state.game_started = True
             st.session_state.answered = False
             st.rerun()
-  else:
-    questions = st.session_state.questions
-    current_idx = st.session_state.current_q
 
-    if current_idx >= len(questions):
-      st.success(
-          f"🎉 Hoàn thành! Số điểm của bạn: {st.session_state.score} /"
-          f" {len(questions)}"
-      )
-      if st.button("🔄 Chơi chủ đề mới"):
-        st.session_state.game_started = False
-        st.session_state.questions = []
-        st.rerun()
-    else:
-      q_data = questions[current_idx]
-      st.write(
-          f"**Câu hỏi {current_idx + 1} / {len(questions)}** (Điểm hiện tại:"
-          f" {st.session_state.score})"
-      )
-      st.subheader(q_data["question"])
-
-      correct_idx = q_data["correct_index"]
-      options = q_data["options"]
-
-      for i, opt in enumerate(options):
-        label = f"{['A', 'B', 'C', 'D'][i]}. {opt}"
-        if not st.session_state.answered:
-          if st.button(label, key=f"opt_{current_idx}_{i}"):
-            st.session_state.answered = True
-            st.session_state.selected_option = i
-            if i == correct_idx:
-              st.session_state.score += 1
-            st.rerun()
-        else:
-          if i == correct_idx:
-            st.success(f"✅ ĐÚNG: {label}")
-          elif i == st.session_state.selected_option:
-            st.error(f"❌ BẠN CHỌN: {label}")
-          else:
-            st.write(label)
-
-      if st.session_state.answered:
-        st.info(f"💡 **Giải thích & Mở rộng kiến thức:** {q_data['explanation']}")
-        if st.button("➡️ Câu tiếp theo"):
-          st.session_state.answered = False
-          st.session_state.selected_option = None
-          st.session_state.current_q += 1
-          st.rerun()
+# Nhạc nền nhẹ nhàng chạy ngầm (Sử dụng link nhạc không lời lặp lại)
+st.markdown("""
+    <audio autoplay loop style="display:none;">
+        <source src="[https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3](https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3)" type="audio/mp3">
+    </audio>
+""", unsafe_allow_html=True)
