@@ -52,7 +52,7 @@ if "is_correct" not in st.session_state:
 
 # Giao diện tiêu đề
 st.title("🧠 AI Trivia Learning App by TDQ")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh và hình ảnh sinh động!")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh và hình ảnh linh hoạt!")
 
 # Kiểm tra API Key
 if not api_key:
@@ -60,7 +60,7 @@ if not api_key:
     st.stop()
 
 # Nhập chủ đề học tập
-topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Động vật hoang dã...")
+topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Kinh tế vĩ mô...")
 
 # Cho phép người dùng tự nhập số lượng câu hỏi tùy ý
 num_q = st.number_input("Nhập số lượng câu hỏi muốn thử thách:", min_value=1, value=5, step=1)
@@ -70,7 +70,7 @@ with col1:
     start_btn = st.button("🚀 Bắt đầu học")
 
 if start_btn and topic:
-    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi kèm từ khóa hình ảnh cho bạn..."):
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi thông minh cho bạn..."):
         try:
             prompt = f"""
             Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
@@ -79,7 +79,7 @@ if start_btn and topic:
               "question": "Nội dung câu hỏi?",
               "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
               "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
-              "keyword": "Từ khóa tiếng Anh ngắn gọn để tìm kiếm hình ảnh minh họa cho câu hỏi này (ví dụ: Nepal flag, Albert Einstein, Eiffel tower)"
+              "keyword": "Nếu câu hỏi này thực sự cần hình ảnh trực quan để minh họa (như quốc kỳ, danh lam, con vật, hiện tượng), hãy điền từ khóa tiếng Anh ngắn gọn. Nếu là câu hỏi thuần kiến thức/văn bản không cần ảnh, hãy để trống chuỗi \"\"."
             }}
             """
             response = client.models.generate_content(
@@ -120,11 +120,11 @@ if st.session_state.game_started and st.session_state.questions:
         
         question_text = current_data["question"]
         options = current_data["options"]
-        keyword = current_data.get("keyword", topic)
+        keyword = current_data.get("keyword", "").strip()
         
         st.markdown(f"### {question_text}")
         
-        # Hiển thị hình ảnh minh họa động thông qua nguồn ảnh chất lượng cao (Unsplash Source theo từ khóa)
+        # CHỈ HIỂN THỊ HÌNH ẢNH NẾU AI XÁC ĐỊNH CÂU HỎI ĐÓ CẦN MINH HỌA (có keyword)
         if keyword:
             formatted_kw = keyword.replace(" ", ",")
             img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
