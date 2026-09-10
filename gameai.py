@@ -52,7 +52,7 @@ if "is_correct" not in st.session_state:
 
 # Giao diện tiêu đề
 st.title("🧠 AI Trivia Learning App by TDQ")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh và hình ảnh linh hoạt!")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm giải thích chi tiết, âm thanh và hình ảnh!")
 
 # Kiểm tra API Key
 if not api_key:
@@ -60,7 +60,7 @@ if not api_key:
     st.stop()
 
 # Nhập chủ đề học tập
-topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Tiếng Anh cơ bản...")
+topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Địa thế thế giới, Lịch sử Việt Nam...")
 
 # Tùy chọn cấp độ khó dễ và số lượng câu hỏi
 col_a, col_b = st.columns(2)
@@ -75,7 +75,7 @@ with col_b:
 start_btn = st.button("🚀 Bắt đầu học", type="primary")
 
 if start_btn and topic:
-    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' cho bạn..."):
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' kèm giải thích chi tiết cho bạn..."):
         try:
             prompt = f"""
             Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
@@ -85,7 +85,8 @@ if start_btn and topic:
               "question": "Nội dung câu hỏi?",
               "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
               "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
-              "keyword": "Nếu câu hỏi này thực sự cần hình ảnh trực quan để minh họa (như quốc kỳ, danh lam, con vật, hiện tượng), hãy điền từ khóa tiếng Anh ngắn gọn. Nếu là câu hỏi thuần kiến thức/văn bản không cần ảnh, hãy để trống chuỗi \"\"."
+              "keyword": "Nếu câu hỏi này thực sự cần hình ảnh trực quan để minh họa (như quốc kỳ, danh lam, con vật, hiện tượng), hãy điền từ khóa tiếng Anh ngắn gọn. Nếu là câu hỏi thuần kiến thức/văn bản không cần ảnh, hãy để trống chuỗi \"\".",
+              "explanation": "Phần giải thích chi tiết, ngắn gọn, dễ hiểu vì sao đáp án đó là chính xác để người học mở rộng kiến thức."
             }}
             """
             response = client.models.generate_content(
@@ -113,7 +114,7 @@ if start_btn and topic:
         except Exception as e:
             err_msg = str(e)
             if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                st.error("⚠️ Bạn đã dùng hết hạn mức miễn phí (Free Tier quota) của API Key này trong ngày. Vui lòng tạo một API Key mới trên Google AI Studio để tiếp tục!")
+                st.error("⚠️ Bạn đã dùng hết hạn mức miễn phí (Free Tier quota) của API Key này. Vui lòng kiểm tra lại dự án hoặc tạo API Key mới!")
             else:
                 st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
 
@@ -131,6 +132,7 @@ if st.session_state.game_started and st.session_state.questions:
         question_text = current_data["question"]
         options = current_data["options"]
         keyword = current_data.get("keyword", "").strip()
+        explanation = current_data.get("explanation", "")
         
         st.markdown(f"### {question_text}")
         
@@ -163,7 +165,7 @@ if st.session_state.game_started and st.session_state.questions:
                     st.session_state.is_correct = False
                 st.rerun()
         
-        # Hiển thị kết quả đúng/sai ngay sau khi người dùng click chọn
+        # Hiển thị kết quả đúng/sai và phần diễn giải chi tiết ngay sau khi người dùng click chọn
         if st.session_state.answered:
             st.write("")
             if st.session_state.is_correct:
@@ -172,6 +174,10 @@ if st.session_state.game_started and st.session_state.questions:
             else:
                 st.error(f"❌ Chưa chính xác! Bạn chọn `{st.session_state.selected_choice}`, nhưng đáp án đúng là: **{current_data['answer']}**")
                 st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
+            
+            # Hiển thị phần diễn giải chi tiết thông tin
+            if explanation:
+                st.info(f"💡 **Giải thích chi tiết:** {explanation}")
             
             st.write("")
             if idx < len(q_list) - 1:
