@@ -15,7 +15,7 @@ try:
 except Exception:
     pass
 
-# Khởi tạo client Gemini (sử dụng cú pháp mới của google-genai)
+# Khởi tạo client Gemini
 client = None
 if api_key:
     try:
@@ -67,7 +67,6 @@ with col1:
 if start_btn and topic:
     with st.spinner("AI đang soạn bộ câu hỏi thú vị cho bạn..."):
         try:
-            # Yêu cầu Gemini tạo 5 câu hỏi trắc nghiệm dưới dạng JSON
             prompt = f"""
             Tạo 5 câu hỏi trắc nghiệm về chủ đề: '{topic}'.
             Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
@@ -78,11 +77,10 @@ if start_btn and topic:
             }}
             """
             response = client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-1.5-flash",
                 contents=prompt,
             )
             
-            # Làm sạch dữ liệu trả về từ AI
             raw_text = response.text.strip()
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
@@ -116,17 +114,14 @@ if st.session_state.game_started and st.session_state.questions:
         question_text = current_data["question"]
         options = current_data["options"]
         
-        # Hiển thị câu hỏi
         st.markdown(f"### {question_text}")
         
-        # Nút đọc câu hỏi và đáp án bằng giọng nói
         full_doc_text = f"Câu hỏi {idx + 1}: {question_text}. Các đáp án là: A. {options[0]}, B. {options[1]}, C. {options[2]}, D. {options[3]}"
         if st.button("🔊 Nghe đọc câu hỏi & đáp án"):
             speak_text(full_doc_text)
             
         st.write("")
         
-        # Hiển thị các lựa chọn trắc nghiệm
         selected = st.radio("Chọn đáp án của bạn:", options, key=f"q_{idx}", index=None if not st.session_state.answered else options.index(st.session_state.selected_choice) if st.session_state.selected_choice in options else 0)
         
         col_sub, col_next = st.columns([1, 1])
@@ -138,16 +133,15 @@ if st.session_state.game_started and st.session_state.questions:
                         st.session_state.answered = True
                         st.session_state.selected_choice = selected
                         
-                        # Kiểm tra đúng/sai và phát âm thanh hiệu ứng tương ứng
                         if selected == current_data["answer"]:
                             st.session_state.score += 1
                             st.success("🎉 Chính xác tuyệt vời!")
-                            # Phát âm thanh đúng
-                            st.audio("[https://www.myinstants.com/media/sounds/success-1-6289.mp3](https://www.myinstants.com/media/sounds/success-1-6289.mp3)", autoplay=True)
+                            # Phát âm thanh đúng bằng HTML audio
+                            st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/success-1-6289.mp3](https://www.myinstants.com/media/sounds/success-1-6289.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
                         else:
                             st.error(f"❌ Chưa chính xác! Đáp án đúng là: **{current_data['answer']}**")
-                            # Phát âm thanh sai
-                            st.audio("[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)", autoplay=True)
+                            # Phát âm thanh sai bằng HTML audio
+                            st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
                         st.rerun()
                     else:
                         st.warning("Vui lòng chọn một đáp án trước khi xác nhận!")
@@ -177,7 +171,7 @@ if st.session_state.game_started and st.session_state.questions:
             st.session_state.answered = False
             st.rerun()
 
-# Nhạc nền nhẹ nhàng chạy ngầm (Sử dụng link nhạc không lời lặp lại)
+# Nhạc nền nhẹ nhàng chạy ngầm
 st.markdown("""
     <audio autoplay loop style="display:none;">
         <source src="[https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3](https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3)" type="audio/mp3">
