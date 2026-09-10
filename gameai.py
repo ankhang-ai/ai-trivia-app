@@ -3,6 +3,7 @@ import streamlit as st
 from google import genai
 from gtts import gTTS
 import io
+import urllib.parse
 
 # Cấu hình trang Streamlit
 st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
@@ -36,7 +37,7 @@ def speak_text(text):
 
 # Khởi tạo trạng thái game và kho lưu trữ đệm (Cache) câu hỏi trong session
 if "question_cache" not in st.session_state:
-    st.session_state.question_cache = {}  # Lưu trữ theo khóa: (chủ đề, cấp độ, số lượng)
+    st.session_state.question_cache = {}
 if "questions" not in st.session_state:
     st.session_state.questions = []
 if "current_q" not in st.session_state:
@@ -54,7 +55,7 @@ if "is_correct" not in st.session_state:
 
 # Giao diện tiêu đề
 st.title("🧠 AI Trivia Learning App by TDQ")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh và hình ảnh linh hoạt!")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh, hình ảnh và giải thích chi tiết!")
 
 # Kiểm tra API Key
 if not api_key:
@@ -79,9 +80,7 @@ start_btn = st.button("🚀 Bắt đầu học", type="primary")
 if start_btn and topic:
     cache_key = f"{topic.strip().lower()}_{difficulty}_{num_q}"
     
-    # Kiểm tra xem chủ đề này đã được lưu trong kho đệm chưa
     if cache_key in st.session_state.question_cache:
-        # Lấy trực tiếp từ kho lưu trữ, KHÔNG GỌI API -> Không tốn lượt, không sợ lỗi quota!
         st.session_state.questions = st.session_state.question_cache[cache_key]
         st.session_state.current_q = 0
         st.session_state.score = 0
@@ -92,8 +91,7 @@ if start_btn and topic:
         st.success("⚡ Tải nhanh bộ câu hỏi đã lưu từ bộ nhớ đệm (Không tốn lượt API)!")
         st.rerun()
     else:
-        # Nếu chưa có thì mới gọi AI tạo mới
-        with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' cho bạn..."):
+        with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' kèm giải thích chi tiết..."):
             try:
                 prompt = f"""
                 Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
@@ -103,7 +101,8 @@ if start_btn and topic:
                   "question": "Nội dung câu hỏi?",
                   "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
                   "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
-                  "keyword": "Nếu câu hỏi này thực sự cần hình ảnh trực quan để minh họa (như quốc kỳ, danh lam, con vật, hiện tượng), hãy điền từ khóa tiếng Anh ngắn gọn. Nếu là câu hỏi thuần kiến thức/văn bản không cần ảnh, hãy để trống chuỗi \"\"."
+                  "explanation": "Giải thích chi tiết vì sao đáp án này lại đúng và ý nghĩa kiến thức liên quan.",
+                  "keyword": "Nếu câu hỏi này thực sự cần hình ảnh trực quan để minh họa (như quốc kỳ, danh lam, con vật, hiện tượng), hãy điền từ khóa tiếng Anh ngắn gọn. Nếu không cần ảnh, để trống \"\"."
                 }}
                 """
                 response = client.models.generate_content(
@@ -120,9 +119,7 @@ if start_btn and topic:
                 questions = json.loads(raw_text.strip())
                 
                 if questions:
-                    # Lưu vào kho đệm để tái sử dụng cho lần sau
                     st.session_state.question_cache[cache_key] = questions
-                    
                     st.session_state.questions = questions
                     st.session_state.current_q = 0
                     st.session_state.score = 0
@@ -134,7 +131,7 @@ if start_btn and topic:
             except Exception as e:
                 err_msg = str(e)
                 if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                    st.error("⚠️ Bạn đang gọi quá nhanh hoặc hết hạn mức. Hãy thử chọn các chủ đề bạn đã từng chơi trước đó (sẽ được tải lại ngay lập tức từ bộ nhớ đệm mà không cần gọi AI) hoặc chờ chút nhé!")
+                    st.error("⚠️ Bạn đang gọi quá nhanh hoặc hết hạn mức. Hãy thử chọn lại chủ đề đã từng chơi để lấy từ bộ nhớ đệm nhé!")
                 else:
                     st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
 
@@ -151,16 +148,17 @@ if st.session_state.game_started and st.session_state.questions:
         
         question_text = current_data["question"]
         options = current_data["options"]
+        explanation = current_data.get("explanation", "Không có phần giải thích cho câu hỏi này.")
         keyword = current_data.get("keyword", "").strip()
         
         st.markdown(f"### {question_text}")
         
-        # Chỉ hiển thị hình ảnh nếu câu hỏi thực sự cần minh họa
+        # Hiển thị hình ảnh minh họa nếu có
         if keyword:
             formatted_kw = keyword.replace(" ", ",")
             img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
             try:
-                st.image(img_source, use_column_width=True, caption=f"Minh họa: {keyword}")
+                st.image(img_source, use_column_width=True, caption=f"🖼️ Hình ảnh minh họa cho: {keyword}")
             except Exception:
                 pass
         
@@ -171,7 +169,6 @@ if st.session_state.game_started and st.session_state.questions:
         st.write("")
         st.markdown("**Chọn đáp án của bạn (Click trực tiếp vào đáp án):**")
         
-        # Hiển thị các đáp án bằng các nút bấm để click trực tiếp
         for opt in options:
             if st.button(opt, key=f"btn_{idx}_{opt}", disabled=st.session_state.answered, use_container_width=True):
                 st.session_state.answered = True
@@ -184,7 +181,7 @@ if st.session_state.game_started and st.session_state.questions:
                     st.session_state.is_correct = False
                 st.rerun()
         
-        # Hiển thị kết quả đúng/sai ngay sau khi người dùng click chọn
+        # Hiển thị kết quả đúng/sai kèm giải thích chi tiết và nút tìm kiếm Google
         if st.session_state.answered:
             st.write("")
             if st.session_state.is_correct:
@@ -193,6 +190,14 @@ if st.session_state.game_started and st.session_state.questions:
             else:
                 st.error(f"❌ Chưa chính xác! Bạn chọn `{st.session_state.selected_choice}`, nhưng đáp án đúng là: **{current_data['answer']}**")
                 st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
+            
+            # Hiển thị phần giải thích chi tiết
+            st.info(f"💡 **Giải thích chi tiết:**\n\n{explanation}")
+            
+            # Nút tự động mở Google Search tìm kiếm thêm thông tin về câu hỏi này
+            search_query = urllib.parse.quote(f"{topic} {question_text}")
+            google_search_url = f"[https://www.google.com/search?q=](https://www.google.com/search?q=){search_query}"
+            st.link_button("🌐 Tìm hiểu thêm trên Google", google_search_url, use_container_width=True)
             
             st.write("")
             if idx < len(q_list) - 1:
