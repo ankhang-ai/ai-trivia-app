@@ -65,7 +65,11 @@ def load_json_from_drive():
         while not done:
             status, done = downloader.next_chunk()
         fh.seek(0)
-        return json.loads(fh.read().decode('utf-8'))
+        content = fh.read().decode('utf-8').strip()
+        if not content:
+            return []
+        data = json.loads(content)
+        return data if isinstance(data, list) else []
     except Exception:
         return []
 
@@ -74,12 +78,10 @@ def save_json_to_drive(new_questions, topic, difficulty):
     if not service:
         return
     try:
-        # Tai du lieu hien tai tren Drive ve truoc
         existing_data = load_json_from_drive()
         if not isinstance(existing_data, list):
             existing_data = []
             
-        # Them thong tin chu de va cap do vao tung cau hoi roi gop vao danh sách chung
         for q in new_questions:
             q_record = {
                 "topic": topic.strip().lower(),
