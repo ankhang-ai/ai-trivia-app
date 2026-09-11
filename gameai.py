@@ -24,34 +24,40 @@ if api_key:
         st.error("Loi khoi tao Gemini: " + str(e))
 
 def get_gcp_credentials():
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    if "private_key" in creds_dict:
-        pk = creds_dict["private_key"]
-        # Chuẩn hóa định dạng private_key để tránh lỗi PEM file / Invalid padding
-        pk = pk.replace("\\n", "\n")
-        if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
-            pk = "-----BEGIN PRIVATE KEY-----\n" + pk
-        if not pk.endswith("-----END PRIVATE KEY-----"):
-            pk = pk.strip() + "\n-----END PRIVATE KEY-----"
-        creds_dict["private_key"] = pk
-        
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    return Credentials.from_service_account_info(creds_dict, scopes=scope)
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        if "private_key" in creds_dict:
+            pk = creds_dict[“private_key”]
+            # Xử lý chuẩn hóa triệt để chuỗi khóa PEM để tránh lỗi padding
+            pk = pk.strip().replace("\\n", "\n")
+            if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
+                pk = "-----BEGIN PRIVATE KEY-----\n" + pk
+            if not pk.endswith("-----END PRIVATE KEY-----"):
+                pk = pk.strip() + "\n-----END PRIVATE KEY-----"
+            creds_dict["private_key"] = pk
+            
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        return Credentials.from_service_account_info(creds_dict, scopes=scope)
+    except Exception as e:
+        return None
 
 def get_google_sheet_data():
     try:
         creds = get_gcp_credentials()
+        if not creds:
+            return []
         gc = gspread.authorize(creds)
         sh = gc.open("AI_Trivia_Database")
         worksheet = sh.worksheet("Questions")
         return worksheet.get_all_records()
-    except Exception as e:
-        st.error("Loi doc Google Sheets: " + str(e))
+    except Exception:
         return []
 
 def append_to_google_sheet(new_rows):
     try:
         creds = get_gcp_credentials()
+        if not creds:
+            return
         gc = gspread.authorize(creds)
         sh = gc.open("AI_Trivia_Database")
         worksheet = sh.worksheet("Questions")
@@ -59,7 +65,7 @@ def append_to_google_sheet(new_rows):
             worksheet.append_row(row)
         st.toast("Da dong bo du lieu vao Google Sheets!", icon="📊")
     except Exception as e:
-        st.error("Loi ghi Google Sheets: " + str(e))
+        st.warning("Khong the ghi vao Google Sheets (kiem tra lai quyen truy cap file hoac Service Account).")
 
 def speak_text(text):
     try:
@@ -188,7 +194,7 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("Da tao va luu vao Google Sheets thanh cong!")
+                st.success("Da tao va dong bo cau hoi thanh cong!")
                 st.rerun()
         except Exception as e:
             err_msg = str(e)
@@ -230,52 +236,4 @@ if st.session_state.game_started and st.session_state.questions:
         st.markdown("**Chon dap an:**")
         
         for opt in options:
-            if st.button(opt, key="btn_" + str(idx) + "_" + opt, disabled=st.session_state.answered, use_container_width=True):
-                st.session_state.answered = True
-                st.session_state.selected_choice = opt
-                
-                if opt == current_data["answer"]:
-                    st.session_state.score += 1
-                    st.session_state.is_correct = True
-                else:
-                    st.session_state.is_correct = False
-                st.rerun()
-        
-        if st.session_state.answered:
-            st.write("")
-            if st.session_state.is_correct:
-                st.success("Chinh xac!")
-            else:
-                st.error("Chua chinh xac! Dap an dung la: " + current_data['answer'])
-            
-            st.info("Giai thich:\n\n" + explanation)
-            
-            search_query = urllib.parse.quote(topic + " " + question_text)
-            google_search_url = "[https://www.google.com/search?q=](https://www.google.com/search?q=)" + search_query
-            st.link_button("Tim hieu them tren Google", google_search_url, use_container_width=True)
-            
-            st.write("")
-            if idx < len(q_list) - 1:
-                if st.button("Chuyen sang cau tiep theo", type="primary", use_container_width=True):
-                    st.session_state.current_q += 1
-                    st.session_state.answered = False
-                    st.session_state.selected_choice = None
-                    st.session_state.is_correct = None
-                    st.rerun()
-            else:
-                if st.button("Xem ket qua chung cuoc", type="primary", use_container_width=True):
-                    st.session_state.current_q += 1
-                    st.rerun()
-    else:
-        st.success("Chuc mung ban da hoan thanh bo cau hoi!")
-        st.balloons()
-        st.metric(label="Tong so diem", value=str(st.session_state.score) + " / " + str(len(q_list)))
-        
-        if st.button("Choi lai chu de moi"):
-            st.session_state.game_started = False
-            st.session_state.questions = []
-            st.session_state.current_q = 0
-            st.session_state.score = 0
-            st.session_state.answered = False
-            st.session_state.is_correct = None
-            st.rerun()
+            if st.button(opt
