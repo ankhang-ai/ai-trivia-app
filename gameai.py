@@ -1,11 +1,12 @@
 import json
+import io
 import streamlit as st
 from google import genai
 from gtts import gTTS
-import io
 import urllib.parse
-import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
 
@@ -23,7 +24,7 @@ if api_key:
     except Exception as e:
         st.error("Loi khoi tao Gemini: " + str(e))
 
-def get_gcp_credentials():
+def get_drive_service():
     try:
         creds_dict = dict(st.secrets["gcp_service_account"])
         if "private_key" in creds_dict:
@@ -35,36 +36,97 @@ def get_gcp_credentials():
                 pk = pk.strip() + "\n-----END PRIVATE KEY-----"
             creds_dict["private_key"] = pk
             
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        return Credentials.from_service_account_info(creds_dict, scopes=scope)
+        scope = ["https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        return build('drive', 'v3', credentials=creds)
     except Exception as e:
         return None
 
-def get_google_sheet_data():
+def load_json_from_drive():
+    service = get_drive_service()
+    if not service:
+        return []
     try:
-        creds = get_gcp_credentials()
-        if not creds:
+        results = service.files().list(
+            q="name='trivia_database.json' and trashed=false",
+            pageSize=1,
+            fields="files(id, name)"
+        ).execute()
+        items = results.get('files', [])
+        
+        if not items:
             return []
-        gc = gspread.authorize(creds)
-        sh = gc.open("AI_Trivia_Database")
-        worksheet = sh.worksheet("Questions")
-        return worksheet.get_all_records()
+        
+        file_id = items[0]['id']
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        return json.loads(fh.read().decode('utf-8'))
     except Exception:
         return []
 
-def append_to_google_sheet(new_rows):
+def save_json_to_drive(new_questions, topic, difficulty):
+    service = get_drive_service()
+    if not service:
+        return
     try:
-        creds = get_gcp_credentials()
-        if not creds:
-            return
-        gc = gspread.authorize(creds)
-        sh = gc.open("AI_Trivia_Database")
-        worksheet = sh.worksheet("Questions")
-        for row in new_rows:
-            worksheet.append_row(row)
-        st.toast("Da dong bo du lieu vao Google Sheets!", icon="📊")
+        # Tai du lieu hien tai tren Drive ve truoc
+        existing_data = load_json_from_drive()
+        if not isinstance(existing_data, list):
+            existing_data = []
+            
+        # Them thong tin chu de va cap do vao tung cau hoi roi gop vao danh sách chung
+        for q in new_questions:
+            q_record = {
+                "topic": topic.strip().lower(),
+                "difficulty": difficulty,
+                "question": q["question"],
+                "options": q["options"],
+                "answer": q["answer"],
+                "explanation": q.get("explanation", ""),
+                "keyword": q.get("keyword", "")
+            }
+            existing_data.append(q_record)
+            
+        file_content = json.dumps(existing_data, ensure_ascii=False, indent=2).encode('utf-8')
+        media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype='application/json', resumable=True)
+        
+        results = service.files().list(
+            q="name='trivia_database.json' and trashed=false",
+            pageSize=1,
+            fields="files(id, name)"
+        ).execute()
+        items = results.get('files', [])
+        
+        if items:
+            file_id = items[0]['id']
+            service.files().update(
+                fileId=file_id,
+                media_body=media
+            ).execute()
+        else:
+            file_metadata = {'name': 'trivia_database.json'}
+            service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+        st.toast("Da dong bo file JSON len Google Drive thanh cong!", icon="☁️")
     except Exception as e:
-        st.warning("Khong the ghi vao Google Sheets (kiem tra lai quyen truy cap file hoac Service Account).")
+        st.warning("Khong the luu file len Google Drive: " + str(e))
+
+def get_cached_questions(topic, difficulty):
+    all_data = load_json_from_drive()
+    target_topic = topic.strip().lower()
+    cached = []
+    for r in all_data:
+        if str(r.get("topic", "")).strip().lower() == target_topic and str(r.get("difficulty", "")) == difficulty:
+            cached.append(r)
+    return cached
 
 def speak_text(text):
     try:
@@ -92,7 +154,7 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 st.title("🧠 AI Trivia Learning App")
-st.markdown("Hoc thong minh qua cau hoi AI, dong bo voi Google Sheets!")
+st.markdown("Hoc thong minh qua cau hoi AI, dong bo file JSON qua Google Drive!")
 
 if not api_key:
     st.warning("Chua tim thay GEMINI_API_KEY trong Streamlit Secrets!")
@@ -114,23 +176,8 @@ start_btn = st.button("Bat dau hoc", type="primary")
 if start_btn and topic:
     target_topic = topic.strip().lower()
     
-    with st.spinner("Dang kiem tra Google Sheets..."):
-        all_rows = get_google_sheet_data()
-        cached_questions = []
-        for r in all_rows:
-            if str(r.get("Topic", "")).strip().lower() == target_topic and str(r.get("Difficulty", "")) == difficulty:
-                try:
-                    options_list = json.loads(r.get("Options", "[]"))
-                except:
-                    options_list = [r.get("Options", "")]
-                
-                cached_questions.append({
-                    "question": r.get("Question"),
-                    "options": options_list,
-                    "answer": r.get("Answer"),
-                    "explanation": r.get("Explanation"),
-                    "keyword": r.get("Keyword", "")
-                })
+    with st.spinner("Dang kiem tra Google Drive..."):
+        cached_questions = get_cached_questions(target_topic, difficulty)
         
         if len(cached_questions) >= num_q:
             st.session_state.questions = cached_questions[:num_q]
@@ -140,7 +187,7 @@ if start_btn and topic:
             st.session_state.answered = False
             st.session_state.selected_choice = None
             st.session_state.is_correct = None
-            st.success("Da tai nhanh cau hoi tu Google Sheets!")
+            st.success("Da tai nhanh cau hoi tu Google Drive!")
             st.rerun()
 
     with st.spinner("AI dang tao cau hoi moi voi gemini-3.6-flash..."):
@@ -173,18 +220,7 @@ if start_btn and topic:
             new_questions = json.loads(raw_text.strip())
             
             if new_questions:
-                rows_to_save = []
-                for q in new_questions:
-                    rows_to_save.append([
-                        topic.strip(),
-                        difficulty,
-                        q["question"],
-                        json.dumps(q["options"], ensure_ascii=False),
-                        q["answer"],
-                        q.get("explanation", ""),
-                        q.get("keyword", "")
-                    ])
-                append_to_google_sheet(rows_to_save)
+                save_json_to_drive(new_questions, topic, difficulty)
                 
                 st.session_state.questions = new_questions
                 st.session_state.current_q = 0
@@ -193,7 +229,7 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("Da tao va dong bo cau hoi thanh cong!")
+                st.success("Da tao va dong bo file len Google Drive thanh cong!")
                 st.rerun()
         except Exception as e:
             err_msg = str(e)
