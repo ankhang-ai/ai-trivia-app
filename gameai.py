@@ -4,8 +4,6 @@ from google import genai
 from gtts import gTTS
 import io
 import urllib.parse
-import gspread
-from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
 
@@ -22,43 +20,6 @@ if api_key:
         client = genai.Client(api_key=api_key)
     except Exception as e:
         st.error("Loi khoi tao Gemini: " + str(e))
-
-def get_gcp_credentials():
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    if "private_key" in creds_dict:
-        pk = creds_dict["private_key"]
-        pk = pk.replace("\\n", "\n")
-        if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
-            pk = "-----BEGIN PRIVATE KEY-----\n" + pk
-        if not pk.endswith("-----END PRIVATE KEY-----"):
-            pk = pk.strip() + "\n-----END PRIVATE KEY-----"
-        creds_dict["private_key"] = pk
-        
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    return Credentials.from_service_account_info(creds_dict, scopes=scope)
-
-def get_google_sheet_data():
-    try:
-        creds = get_gcp_credentials()
-        gc = gspread.authorize(creds)
-        sh = gc.open("AI_Trivia_Database")
-        worksheet = sh.worksheet("Questions")
-        return worksheet.get_all_records()
-    except Exception as e:
-        st.error("Loi doc Google Sheets: " + str(e))
-        return []
-
-def append_to_google_sheet(new_rows):
-    try:
-        creds = get_gcp_credentials()
-        gc = gspread.authorize(creds)
-        sh = gc.open("AI_Trivia_Database")
-        worksheet = sh.worksheet("Questions")
-        for row in new_rows:
-            worksheet.append_row(row)
-        st.toast("Da dong bo du lieu vao Google Sheets!", icon="📊")
-    except Exception as e:
-        st.error("Loi ghi Google Sheets: " + str(e))
 
 def speak_text(text):
     try:
@@ -86,7 +47,7 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 st.title("🧠 AI Trivia Learning App")
-st.markdown("Hoc thong minh qua cau hoi AI, dong bo voi Google Sheets!")
+st.markdown("Hoc thong minh qua cau hoi AI tu dong!")
 
 if not api_key:
     st.warning("Chua tim thay GEMINI_API_KEY trong Streamlit Secrets!")
@@ -106,37 +67,6 @@ with col_b:
 start_btn = st.button("Bat dau hoc", type="primary")
 
 if start_btn and topic:
-    target_topic = topic.strip().lower()
-    
-    with st.spinner("Dang kiem tra Google Sheets..."):
-        all_rows = get_google_sheet_data()
-        cached_questions = []
-        for r in all_rows:
-            if str(r.get("Topic", "")).strip().lower() == target_topic and str(r.get("Difficulty", "")) == difficulty:
-                try:
-                    options_list = json.loads(r.get("Options", "[]"))
-                except:
-                    options_list = [r.get("Options", "")]
-                
-                cached_questions.append({
-                    "question": r.get("Question"),
-                    "options": options_list,
-                    "answer": r.get("Answer"),
-                    "explanation": r.get("Explanation"),
-                    "keyword": r.get("Keyword", "")
-                })
-        
-        if len(cached_questions) >= num_q:
-            st.session_state.questions = cached_questions[:num_q]
-            st.session_state.current_q = 0
-            st.session_state.score = 0
-            st.session_state.game_started = True
-            st.session_state.answered = False
-            st.session_state.selected_choice = None
-            st.session_state.is_correct = None
-            st.success("Da tai nhanh cau hoi tu Google Sheets!")
-            st.rerun()
-
     with st.spinner("AI dang tao cau hoi moi voi gemini-3.6-flash..."):
         try:
             prompt = (
@@ -167,19 +97,6 @@ if start_btn and topic:
             new_questions = json.loads(raw_text.strip())
             
             if new_questions:
-                rows_to_save = []
-                for q in new_questions:
-                    rows_to_save.append([
-                        topic.strip(),
-                        difficulty,
-                        q["question"],
-                        json.dumps(q["options"], ensure_ascii=False),
-                        q["answer"],
-                        q.get("explanation", ""),
-                        q.get("keyword", "")
-                    ])
-                append_to_google_sheet(rows_to_save)
-                
                 st.session_state.questions = new_questions
                 st.session_state.current_q = 0
                 st.session_state.score = 0
@@ -187,7 +104,7 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("Da tao va luu cau hoi thanh cong!")
+                st.success("Da tao bo cau hoi thanh cong!")
                 st.rerun()
         except Exception as e:
             err_msg = str(e)
@@ -227,3 +144,54 @@ if st.session_state.game_started and st.session_state.questions:
             
         st.write("")
         st.markdown("**Chon dap an:**")
+        
+        for opt in options:
+            if st.button(opt, key="btn_" + str(idx) + "_" + opt, disabled=st.session_state.answered, use_container_width=True):
+                st.session_state.answered = True
+                st.session_state.selected_choice = opt
+                
+                if opt == current_data["answer"]:
+                    st.session_state.score += 1
+                    st.session_state.is_correct = True
+                else:
+                    st.session_state.is_correct = False
+                st.rerun()
+        
+        if st.session_state.answered:
+            st.write("")
+            if st.session_state.is_correct:
+                st.success("Chinh xac!")
+            else:
+                st.error("Chua chinh xac! Dap an dung la: " + current_data['answer'])
+            
+            st.info("Giai thich:\n\n" + explanation)
+            
+            search_query = urllib.parse.quote(topic + " " + question_text)
+            google_search_url = "[https://www.google.com/search?q=](https://www.google.com/search?q=)" + search_query
+            st.link_button("Tim hieu them tren Google", google_search_url, use_container_width=True)
+            
+            st.write("")
+            if idx < len(q_list) - 1:
+                if st.button("Chuyen sang cau tiep theo", type="primary", use_container_width=True):
+                    st.session_state.current_q += 1
+                    st.session_state.answered = False
+                    st.session_state.selected_choice = None
+                    st.session_state.is_correct = None
+                    st.rerun()
+            else:
+                if st.button("Xem ket qua chung cuoc", type="primary", use_container_width=True):
+                    st.session_state.current_q += 1
+                    st.rerun()
+    else:
+        st.success("Chuc mung ban da hoan thanh bo cau hoi!")
+        st.balloons()
+        st.metric(label="Tong so diem", value=str(st.session_state.score) + " / " + str(len(q_list)))
+        
+        if st.button("Choi lai chu de moi"):
+            st.session_state.game_started = False
+            st.session_state.questions = []
+            st.session_state.current_q = 0
+            st.session_state.score = 0
+            st.session_state.answered = False
+            st.session_state.is_correct = None
+            st.rerun()
