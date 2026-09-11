@@ -26,10 +26,9 @@ if api_key:
     except Exception as e:
         st.error(f"Lỗi khởi tạo Gemini Client: {e}")
 
-# Hàm kết nối Google Sheets tự động (Đã xử lý lỗi định dạng PEM/Padding)
+# Hàm kết nối Google Sheets tự động (Đã chuẩn hóa private_key chống lỗi PEM)
 def get_gcp_credentials():
     creds_dict = dict(st.secrets["gcp_service_account"])
-    # Xử lý chuẩn hóa định dạng private_key để tránh lỗi Invalid padding
     if "private_key" in creds_dict:
         creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -139,7 +138,7 @@ if start_btn and topic:
             st.success("⚡ Đã tìm thấy và tải nhanh bộ câu hỏi từ kho Google Sheets cá nhân!")
             st.rerun()
 
-    # BƯỚC 2: Nếu chưa có, gọi AI tạo mới (dùng gemini-1.5-flash ổn định)
+    # BƯỚC 2: Nếu chưa có, gọi AI tạo mới (dùng gemini-2.0-flash chuẩn xác)
     with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' và tự động lưu vào Google Sheets..."):
         try:
             prompt = f"""
@@ -155,7 +154,7 @@ if start_btn and topic:
             }}
             """
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt,
             )
             
@@ -218,65 +217,4 @@ if st.session_state.game_started and st.session_state.questions:
         if keyword:
             formatted_kw = keyword.replace(" ", ",")
             img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
-            try:
-                st.image(img_source, use_column_width=True, caption=f"🖼️ Hình ảnh minh họa cho: {keyword}")
-            except Exception:
-                pass
-        
-        full_doc_text = f"Câu hỏi {idx + 1}: {question_text}. Các đáp án là: A. {options[0]}, B. {options[1]}, C. {options[2]}, D. {options[3]}"
-        if st.button("🔊 Nghe đọc câu hỏi & đáp án"):
-            speak_text(full_doc_text)
-            
-        st.write("")
-        st.markdown("**Chọn đáp án của bạn:**")
-        
-        for opt in options:
-            if st.button(opt, key=f"btn_{idx}_{opt}", disabled=st.session_state.answered, use_container_width=True):
-                st.session_state.answered = True
-                st.session_state.selected_choice = opt
-                
-                if opt == current_data["answer"]:
-                    st.session_state.score += 1
-                    st.session_state.is_correct = True
-                else:
-                    st.session_state.is_correct = False
-                st.rerun()
-        
-        if st.session_state.answered:
-            st.write("")
-            if st.session_state.is_correct:
-                st.success(f"🎉 Chính xác! Bạn đã chọn đúng: **{st.session_state.selected_choice}**")
-            else:
-                st.error(f"❌ Chưa chính xác! Bạn chọn `{st.session_state.selected_choice}`, đáp án đúng là: **{current_data['answer']}**")
-            
-            st.info(f"💡 **Giải thích chi tiết:**\n\n{explanation}")
-            
-            search_query = urllib.parse.quote(f"{topic} {question_text}")
-            google_search_url = f"[https://www.google.com/search?q=](https://www.google.com/search?q=){search_query}"
-            st.link_button("🌐 Tìm hiểu thêm trên Google", google_search_url, use_container_width=True)
-            
-            st.write("")
-            if idx < len(q_list) - 1:
-                if st.button("➡️ Chuyển sang câu hỏi tiếp theo", type="primary", use_container_width=True):
-                    st.session_state.current_q += 1
-                    st.session_state.answered = False
-                    st.session_state.selected_choice = None
-                    st.session_state.is_correct = None
-                    st.rerun()
-            else:
-                if st.button("🏆 Xem kết quả chung cuộc", type="primary", use_container_width=True):
-                    st.session_state.current_q += 1
-                    st.rerun()
-    else:
-        st.success("🎉 Chúc mừng bạn đã hoàn thành xong bộ câu hỏi!")
-        st.balloons()
-        st.metric(label="Tổng số điểm của bạn", value=f"{st.session_state.score} / {len(q_list)}")
-        
-        if st.button("🔄 Chơi lại chủ đề mới"):
-            st.session_state.game_started = False
-            st.session_state.questions = []
-            st.session_state.current_q = 0
-            st.session_state.score = 0
-            st.session_state.answered = False
-            st.session_state.is_correct = None
-            st.rerun()
+            try
