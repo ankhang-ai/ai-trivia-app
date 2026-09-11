@@ -27,7 +27,6 @@ def get_gcp_credentials():
     creds_dict = dict(st.secrets["gcp_service_account"])
     if "private_key" in creds_dict:
         pk = creds_dict["private_key"]
-        # Xử lý chuẩn hóa định dạng private_key cho Streamlit Secrets
         pk = pk.replace("\\n", "\n")
         if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
             pk = "-----BEGIN PRIVATE KEY-----\n" + pk
@@ -222,4 +221,28 @@ if st.session_state.game_started and st.session_state.questions:
             except Exception:
                 pass
         
-        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_
+        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_text
+        if st.button("Nghe doc cau hoi"):
+            speak_text(full_doc_text)
+            
+        st.write("")
+        st.markdown("**Chon dap an:**")
+        
+        for opt in options:
+            if st.button(opt, key="btn_" + str(idx) + "_" + opt, disabled=st.session_state.answered, use_container_width=True):
+                st.session_state.answered = True
+                st.session_state.selected_choice = opt
+                
+                if opt == current_data["answer"]:
+                    st.session_state.score += 1
+                    st.session_state.is_correct = True
+                else:
+                    st.session_state.is_correct = False
+                st.rerun()
+        
+        if st.session_state.answered:
+            st.write("")
+            if st.session_state.is_correct:
+                st.success("Chinh xac! Ban da chon dung.")
+            else:
+                st.error("Ch
