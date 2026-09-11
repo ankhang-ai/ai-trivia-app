@@ -150,7 +150,7 @@ if start_btn and topic:
                 "]"
             )
             response = client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
             
@@ -190,3 +190,87 @@ if start_btn and topic:
             if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 st.warning("Da het han muc API. Vui long thu lai sau!")
             else:
+                st.error("Loi xay ra: " + err_msg)
+
+if st.session_state.game_started and st.session_state.questions:
+    q_list = st.session_state.questions
+    idx = st.session_state.current_q
+    
+    if idx < len(q_list):
+        current_data = q_list[idx]
+        
+        st.divider()
+        st.subheader("Cau hoi " + str(idx + 1) + " / " + str(len(q_list)))
+        
+        question_text = current_data["question"]
+        options = current_data["options"]
+        explanation = current_data.get("explanation", "Khong co giai thich.")
+        keyword = current_data.get("keyword", "").strip()
+        
+        st.markdown("### " + question_text)
+        
+        if keyword:
+            formatted_kw = keyword.replace(" ", ",")
+            img_source = "[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?" + formatted_kw
+            try:
+                st.image(img_source, caption="Hinh anh minh hoa: " + keyword)
+            except Exception:
+                pass
+        
+        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_text
+        if st.button("Nghe doc cau hoi"):
+            speak_text(full_doc_text)
+            
+        st.write("")
+        st.markdown("**Chon dap an:**")
+        
+        for opt in options:
+            if st.button(opt, key="btn_" + str(idx) + "_" + opt, disabled=st.session_state.answered, use_container_width=True):
+                st.session_state.answered = True
+                st.session_state.selected_choice = opt
+                
+                if opt == current_data["answer"]:
+                    st.session_state.score += 1
+                    st.session_state.is_correct = True
+                else:
+                    st.session_state.is_correct = False
+                st.rerun()
+        
+        if st.session_state.answered:
+            st.write("")
+            if st.session_state.is_correct:
+                st.success("Chinh xac! Ban da chon dung.")
+            else:
+                st.error("Chua chinh xac! Dap an dung la: " + current_data['answer'])
+            
+            st.info("Giai thich:\n\n" + explanation)
+            
+            search_query = urllib.parse.quote(topic + " " + question_text)
+            google_search_url = "[https://www.google.com/search?q=](https://www.google.com/search?q=)" + search_query
+            st.link_button("Tim hieu them tren Google", google_search_url, use_container_width=True)
+            
+            st.write("")
+            if idx < len(q_list) - 1:
+                if st.button("Chuyen sang cau tiep theo", type="primary", use_container_width=True):
+                    st.session_state.current_q += 1
+                    st.session_state.answered = False
+                    st.session_state.selected_choice = None
+                    st.session_state.is_correct = None
+                    st.rerun()
+            else:
+                if st.button("Xem ket qua chung cuoc", type="primary", use_container_width=True):
+                    st.session_state.current_q += 1
+                    st.rerun()
+    else:
+        st.success("Chuc mung ban da hoan thanh bo cau hoi!")
+        st.balloons()
+        st.metric(label="Tong so diem cua ban", value=str(st.session_state.score) + " / " + str(len(q_list)))
+        
+        if st.button("Choi lai chu de moi"):
+            st.session_state.game_started = False
+            st.session_state.questions = []
+            st.session_state.current_q = 0
+            st.session_state.score = 0
+            st.session_state.answered = False
+            st.session_state.is_correct = None
+            st.rerun()
