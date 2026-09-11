@@ -188,6 +188,4 @@ if start_btn and topic:
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
                 st.success("✨ Đã tạo mới câu hỏi và tự động đồng bộ thành công vào Google Sheets!")
-                st.rerun()
-        except Exception as e:
-            err_msg = str(e
+                st.rerun
