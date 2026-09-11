@@ -4,6 +4,8 @@ from google import genai
 from gtts import gTTS
 import io
 import urllib.parse
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Cấu hình trang Streamlit
 st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
@@ -24,6 +26,33 @@ if api_key:
     except Exception as e:
         st.error(f"Lỗi khởi tạo Gemini Client: {e}")
 
+# Hàm kết nối Google Sheets tự động
+def get_google_sheet_data():
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        gc = gspread.authorize(creds)
+        # Mở bảng tính có tên "AI_Trivia_Database" và tab "Questions"
+        sh = gc.open("AI_Trivia_Database")
+        worksheet = sh.worksheet("Questions")
+        return worksheet.get_all_records()
+    except Exception as e:
+        return []
+
+def append_to_google_sheet(new_rows):
+    try:
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        gc = gspread.authorize(creds)
+        sh = gc.open("AI_Trivia_Database")
+        worksheet = sh.worksheet("Questions")
+        for row in new_rows:
+            worksheet.append_row(row)
+    except Exception as e:
+        pass
+
 # Hàm chuyển văn bản thành giọng nói tiếng Việt
 def speak_text(text):
     try:
@@ -35,9 +64,7 @@ def speak_text(text):
     except Exception as e:
         pass
 
-# Khởi tạo trạng thái game và kho lưu trữ đệm (Cache) câu hỏi trong session
-if "question_cache" not in st.session_state:
-    st.session_state.question_cache = {}
+# Khởi tạo trạng thái game
 if "questions" not in st.session_state:
     st.session_state.questions = []
 if "current_q" not in st.session_state:
@@ -55,17 +82,16 @@ if "is_correct" not in st.session_state:
 
 # Giao diện tiêu đề
 st.title("🧠 AI Trivia Learning App by TDQ")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn kèm âm thanh, hình ảnh và giải thích chi tiết!")
+st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn, đồng bộ vĩnh viễn với Google Sheets!")
 
-# Kiểm tra API Key
+# Kiểm tra API Key và Secrets
 if not api_key:
-    st.warning("⚠️ Chưa tìm thấy `GEMINI_API_KEY` trong Streamlit Secrets. Vui lòng cấu hình trong phần Advanced settings!")
+    st.warning("⚠️ Chưa tìm thấy cấu hình trong Streamlit Secrets!")
     st.stop()
 
 # Nhập chủ đề học tập
 topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Tiếng Anh cơ bản...")
 
-# Tùy chọn cấp độ khó dễ và số lượng câu hỏi
 col_a, col_b = st.columns(2)
 with col_a:
     difficulty = st.selectbox(
@@ -78,64 +104,99 @@ with col_b:
 start_btn = st.button("🚀 Bắt đầu học", type="primary")
 
 if start_btn and topic:
-    cache_key = f"{topic.strip().lower()}_{difficulty}_{num_q}"
+    target_topic = topic.strip().lower()
     
-    if cache_key in st.session_state.question_cache:
-        st.session_state.questions = st.session_state.question_cache[cache_key]
-        st.session_state.current_q = 0
-        st.session_state.score = 0
-        st.session_state.game_started = True
-        st.session_state.answered = False
-        st.session_state.selected_choice = None
-        st.session_state.is_correct = None
-        st.success("⚡ Tải nhanh bộ câu hỏi đã lưu từ bộ nhớ đệm (Không tốn lượt API)!")
-        st.rerun()
-    else:
-        with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' kèm giải thích chi tiết..."):
-            try:
-                prompt = f"""
-                Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
-                Cấp độ khó của câu hỏi: {difficulty}.
-                Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
-                {{
-                  "question": "Nội dung câu hỏi?",
-                  "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
-                  "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
-                  "explanation": "Giải thích chi tiết vì sao đáp án này lại đúng và ý nghĩa kiến thức liên quan.",
-                  "keyword": "Nếu câu hỏi này thực sự cần hình ảnh trực quan để minh họa (như quốc kỳ, danh lam, con vật, hiện tượng), hãy điền từ khóa tiếng Anh ngắn gọn. Nếu không cần ảnh, để trống \"\"."
-                }}
-                """
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=prompt,
-                )
+    # BƯỚC 1: Lục kho cũ từ Google Sheets
+    with st.spinner("Đang kiểm tra kho dữ liệu trên Google Sheets..."):
+        all_rows = get_google_sheet_data()
+        cached_questions = []
+        for r in all_rows:
+            if str(r.get("Topic", "")).strip().lower() == target_topic and str(r.get("Difficulty", "")) == difficulty:
+                try:
+                    options_list = json.loads(r.get("Options", "[]"))
+                except:
+                    options_list = [r.get("Options", "")]
                 
-                raw_text = response.text.strip()
-                if raw_text.startswith("```json"):
-                    raw_text = raw_text[7:]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text[:-3]
-                
-                questions = json.loads(raw_text.strip())
-                
-                if questions:
-                    st.session_state.question_cache[cache_key] = questions
-                    st.session_state.questions = questions
-                    st.session_state.current_q = 0
-                    st.session_state.score = 0
-                    st.session_state.game_started = True
-                    st.session_state.answered = False
-                    st.session_state.selected_choice = None
-                    st.session_state.is_correct = None
-                    st.rerun()
-            except Exception as e:
-                err_msg = str(e)
-                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                    st.error("⚠️ Bạn đang gọi quá nhanh hoặc hết hạn mức. Hãy thử chọn lại chủ đề đã từng chơi để lấy từ bộ nhớ đệm nhé!")
-                else:
-                    st.error(f"Có lỗi khi tạo câu hỏi từ AI: {e}")
+                cached_questions.append({
+                    "question": r.get("Question"),
+                    "options": options_list,
+                    "answer": r.get("Answer"),
+                    "explanation": r.get("Explanation"),
+                    "keyword": r.get("Keyword", "")
+                })
+        
+        # Nếu kho trên Sheets đã có đủ hoặc gần đủ số lượng yêu cầu, lấy ra dùng luôn!
+        if len(cached_questions) >= num_q:
+            st.session_state.questions = cached_questions[:num_q]
+            st.session_state.current_q = 0
+            st.session_state.score = 0
+            st.session_state.game_started = True
+            st.session_state.answered = False
+            st.session_state.selected_choice = None
+            st.session_state.is_correct = None
+            st.success("⚡ Đã tìm thấy và tải nhanh bộ câu hỏi từ kho Google Sheets cá nhân (Không tốn lượt API)!")
+            st.rerun()
 
-# Tiến hành chơi game nếu đã có câu hỏi
+    # BƯỚC 2: Nếu chưa có trong kho, gọi AI tạo mới
+    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' và tự động lưu vào Google Sheets..."):
+        try:
+            prompt = f"""
+            Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
+            Cấp độ khó của câu hỏi: {difficulty}.
+            Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
+            {{
+              "question": "Nội dung câu hỏi?",
+              "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+              "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
+              "explanation": "Giải thích chi tiết vì sao đáp án này lại đúng.",
+              "keyword": "Từ khóa tiếng Anh ngắn gọn nếu cần ảnh minh họa, nếu không để trống \"\"."
+            }}
+            """
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=prompt,
+            )
+            
+            raw_text = response.text.strip()
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            
+            new_questions = json.loads(raw_text.strip())
+            
+            if new_questions:
+                # Đẩy ngầm các câu hỏi mới tạo lên Google Sheets để bồi đắp kho dữ liệu
+                rows_to_save = []
+                for q in new_questions:
+                    rows_to_save.append([
+                        topic.strip(),
+                        difficulty,
+                        q["question"],
+                        json.dumps(q["options"], ensure_ascii=False),
+                        q["answer"],
+                        q.get("explanation", ""),
+                        q.get("keyword", "")
+                    ])
+                append_to_google_sheet(rows_to_save)
+                
+                st.session_state.questions = new_questions
+                st.session_state.current_q = 0
+                st.session_state.score = 0
+                st.session_state.game_started = True
+                st.session_state.answered = False
+                st.session_state.selected_choice = None
+                st.session_state.is_correct = None
+                st.success("✨ Đã tạo mới câu hỏi và tự động đồng bộ thành công vào Google Sheets!")
+                st.rerun()
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                st.error("⚠️ Hết hạn mức API. Hãy chọn các chủ đề bạn đã từng học để lấy trực tiếp từ Google Sheets nhé!")
+            else:
+                st.error(f"Có lỗi xảy ra: {e}")
+
+# Tiến hành chơi game
 if st.session_state.game_started and st.session_state.questions:
     q_list = st.session_state.questions
     idx = st.session_state.current_q
@@ -148,12 +209,11 @@ if st.session_state.game_started and st.session_state.questions:
         
         question_text = current_data["question"]
         options = current_data["options"]
-        explanation = current_data.get("explanation", "Không có phần giải thích cho câu hỏi này.")
+        explanation = current_data.get("explanation", "Không có phần giải thích.")
         keyword = current_data.get("keyword", "").strip()
         
         st.markdown(f"### {question_text}")
         
-        # Hiển thị hình ảnh minh họa nếu có
         if keyword:
             formatted_kw = keyword.replace(" ", ",")
             img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
@@ -167,7 +227,7 @@ if st.session_state.game_started and st.session_state.questions:
             speak_text(full_doc_text)
             
         st.write("")
-        st.markdown("**Chọn đáp án của bạn (Click trực tiếp vào đáp án):**")
+        st.markdown("**Chọn đáp án của bạn:**")
         
         for opt in options:
             if st.button(opt, key=f"btn_{idx}_{opt}", disabled=st.session_state.answered, use_container_width=True):
@@ -181,20 +241,17 @@ if st.session_state.game_started and st.session_state.questions:
                     st.session_state.is_correct = False
                 st.rerun()
         
-        # Hiển thị kết quả đúng/sai kèm giải thích chi tiết và nút tìm kiếm Google
         if st.session_state.answered:
             st.write("")
             if st.session_state.is_correct:
-                st.success(f"🎉 Chính xác tuyệt vời! Bạn đã chọn đúng: **{st.session_state.selected_choice}**")
+                st.success(f"🎉 Chính xác! Bạn đã chọn đúng: **{st.session_state.selected_choice}**")
                 st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/success-1-6289.mp3](https://www.myinstants.com/media/sounds/success-1-6289.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
             else:
-                st.error(f"❌ Chưa chính xác! Bạn chọn `{st.session_state.selected_choice}`, nhưng đáp án đúng là: **{current_data['answer']}**")
+                st.error(f"❌ Chưa chính xác! Bạn chọn `{st.session_state.selected_choice}`, đáp án đúng là: **{current_data['answer']}**")
                 st.markdown('<audio autoplay><source src="[https://www.myinstants.com/media/sounds/error-8-206492.mp3](https://www.myinstants.com/media/sounds/error-8-206492.mp3)" type="audio/mp3"></audio>', unsafe_allow_html=True)
             
-            # Hiển thị phần giải thích chi tiết
             st.info(f"💡 **Giải thích chi tiết:**\n\n{explanation}")
             
-            # Nút tự động mở Google Search tìm kiếm thêm thông tin về câu hỏi này
             search_query = urllib.parse.quote(f"{topic} {question_text}")
             google_search_url = f"[https://www.google.com/search?q=](https://www.google.com/search?q=){search_query}"
             st.link_button("🌐 Tìm hiểu thêm trên Google", google_search_url, use_container_width=True)
@@ -225,7 +282,6 @@ if st.session_state.game_started and st.session_state.questions:
             st.session_state.is_correct = None
             st.rerun()
 
-# Nhạc nền nhẹ nhàng chạy ngầm
 st.markdown("""
     <audio autoplay loop style="display:none;">
         <source src="[https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3](https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3)" type="audio/mp3">
