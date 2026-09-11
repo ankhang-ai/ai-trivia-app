@@ -86,7 +86,7 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 st.title("🧠 AI Trivia Learning App")
-st.markdown("Học thông minh qua câu hỏi AI, đồng bộ với Google Sheets!")
+st.markdown("Hoc thong minh qua cau hoi AI, dong bo voi Google Sheets!")
 
 if not api_key:
     st.warning("Chua tim thay GEMINI_API_KEY trong Streamlit Secrets!")
@@ -98,7 +98,7 @@ col_a, col_b = st.columns(2)
 with col_a:
     difficulty = st.selectbox(
         "Chon cap do kho:",
-        ["De (Co ban)", "Trung binh (Hieu biet chung)", "Kho (Nang cao, chuyen sau)"]
+        ["De", "Trung binh", "Kho"]
     )
 with col_b:
     num_q = st.number_input("So luong cau hoi:", min_value=1, value=5, step=1)
@@ -108,7 +108,7 @@ start_btn = st.button("Bat dau hoc", type="primary")
 if start_btn and topic:
     target_topic = topic.strip().lower()
     
-    with st.spinner("Dang kiem tra kho du lieu Google Sheets..."):
+    with st.spinner("Dang kiem tra Google Sheets..."):
         all_rows = get_google_sheet_data()
         cached_questions = []
         for r in all_rows:
@@ -134,10 +134,10 @@ if start_btn and topic:
             st.session_state.answered = False
             st.session_state.selected_choice = None
             st.session_state.is_correct = None
-            st.success("Da tai nhanh bo cau hoi tu Google Sheets!")
+            st.success("Da tai nhanh cau hoi tu Google Sheets!")
             st.rerun()
 
-    with st.spinner("AI đang soạn bộ câu hỏi mới với gemini-3.6-flash..."):
+    with st.spinner("AI dang tao cau hoi moi voi gemini-3.6-flash..."):
         try:
             prompt = (
                 f"Tao {num_q} cau hoi trac nghiem ve chu de: '{topic}'. "
@@ -187,7 +187,7 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("Da tao va luu bo cau hoi vao Google Sheets!")
+                st.success("Da tao va luu cau hoi thanh cong!")
                 st.rerun()
         except Exception as e:
             err_msg = str(e)
@@ -227,22 +227,3 @@ if st.session_state.game_started and st.session_state.questions:
             
         st.write("")
         st.markdown("**Chon dap an:**")
-        
-        for opt in options:
-            if st.button(opt, key="btn_" + str(idx) + "_" + opt, disabled=st.session_state.answered, use_container_width=True):
-                st.session_state.answered = True
-                st.session_state.selected_choice = opt
-                
-                if opt == current_data["answer"]:
-                    st.session_state.score += 1
-                    st.session_state.is_correct = True
-                else:
-                    st.session_state.is_correct = False
-                st.rerun()
-        
-        if st.session_state.answered:
-            st.write("")
-            if st.session_state.is_correct:
-                st.success("Chinh xac! Ban da chon dung.")
-            else:
-                st.error("Ch
