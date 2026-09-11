@@ -188,4 +188,20 @@ if start_btn and topic:
                 
                 st.session_state.questions = new_questions
                 st.session_state.current_q = 0
-                st.session_state.
+                st.session_state.score = 0
+                st.session_state.game_started = True
+                st.session_state.answered = False
+                st.session_state.selected_choice = None
+                st.session_state.is_correct = None
+                st.success("Da tao va dong bo cau hoi thanh cong!")
+                st.rerun()
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                st.warning("Da het han muc API. Vui long thu lai sau!")
+            else:
+                st.error("Loi xay ra: " + err_msg)
+
+if st.session_state.game_started and st.session_state.questions:
+    q_list = st.session_state.questions
+    idx = st.session_
