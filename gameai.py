@@ -18,20 +18,19 @@ try:
 except Exception:
     pass
 
-# Khởi tạo client Gemini (Dùng model mới nhất theo yêu cầu hệ thống)
+# Khởi tạo client Gemini
 client = None
 if api_key:
     try:
         client = genai.Client(api_key=api_key)
     except Exception as e:
-        st.error(f"Lỗi khởi tạo Gemini Client: {e}")
+        st.error("Lỗi khởi tạo Gemini Client: " + str(e))
 
-# Hàm kết nối Google Sheets (Đã xử lý chuẩn xác lỗi PEM key padding)
+# Hàm kết nối Google Sheets
 def get_gcp_credentials():
     creds_dict = dict(st.secrets["gcp_service_account"])
     if "private_key" in creds_dict:
         pk = creds_dict["private_key"].strip()
-        # Xử lý triệt để dấu xuống dòng bị lỗi escape
         if "\\n" in pk and "\n" not in pk:
             pk = pk.replace("\\n", "\n")
         creds_dict["private_key"] = pk
@@ -46,7 +45,7 @@ def get_google_sheet_data():
         worksheet = sh.worksheet("Questions")
         return worksheet.get_all_records()
     except Exception as e:
-        st.error(f"Lỗi đọc Google Sheets: {e}")
+        st.error("Lỗi đọc Google Sheets: " + str(e))
         return []
 
 def append_to_google_sheet(new_rows):
@@ -59,7 +58,7 @@ def append_to_google_sheet(new_rows):
             worksheet.append_row(row)
         st.toast("✨ Đã đồng bộ dữ liệu vào Google Sheets thành công!", icon="📊")
     except Exception as e:
-        st.error(f"Lỗi ghi Google Sheets: {e}")
+        st.error("Lỗi ghi Google Sheets: " + str(e))
 
 # Hàm chuyển văn bản thành giọng nói tiếng Việt
 def speak_text(text):
@@ -143,20 +142,20 @@ if start_btn and topic:
             st.rerun()
 
     # BƯỚC 2: Nếu chưa có, gọi AI tạo mới (Sử dụng gemini-3.6-flash chuẩn xác)
-    with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' và tự động lưu vào Google Sheets..."):
+    with st.spinner("AI đang soạn bộ câu hỏi và tự động lưu vào Google Sheets..."):
         try:
-            prompt = f"""
-            Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'.
-            Cấp độ khó của câu hỏi: {difficulty}.
-            Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc:
-            {{
-              "question": "Nội dung câu hỏi?",
-              "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
-              "answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên",
-              "explanation": "Giải thích chi tiết vì sao đáp án này lại đúng.",
-              "keyword": "Từ khóa tiếng Anh ngắn gọn nếu cần ảnh minh họa, nếu không để trống \"\"."
-            }}
-            """
+            prompt = (
+                f"Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'. "
+                f"Cấp độ khó của câu hỏi: {difficulty}. "
+                "Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc: "
+                "{"
+                '"question": "Nội dung câu hỏi?", '
+                '"options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], '
+                '"answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên", '
+                '"explanation": "Giải thích chi tiết vì sao đáp án này lại đúng.", '
+                '"keyword": "Từ khóa tiếng Anh ngắn gọn nếu cần ảnh minh họa, nếu không để trống \\"\\"." '
+                "}"
+            )
             response = client.models.generate_content(
                 model="gemini-3.6-flash",
                 contents=prompt,
@@ -191,11 +190,4 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("✨ Đã tạo mới câu hỏi và tự động đồng bộ thành công vào Google Sheets!")
-                st.rerun()
-        except Exception as e:
-            err_msg = str(e)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                st.error("⚠️ Hết hạn mức API. Hãy chọn các chủ đề bạn đã từng học để lấy trực tiếp từ Google Sheets nhé!")
-            else:
-                st.error(f"Có lỗi xảy ra:
+                st.success("✨ Đã tạo mới câu hỏi và tự động đồng
