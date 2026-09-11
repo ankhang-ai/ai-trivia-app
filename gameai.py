@@ -1,5 +1,7 @@
 import json
 import io
+import tempfile
+import os
 import streamlit as st
 from google import genai
 from gtts import gTTS
@@ -29,16 +31,26 @@ def get_drive_service():
         creds_dict = dict(st.secrets["gcp_service_account"])
         if "private_key" in creds_dict:
             pk = str(creds_dict["private_key"]).strip()
-            
-            # Làm sạch và chuẩn hóa lại toàn bộ định dạng PEM của private key
+            # Đảm bảo các dòng xuống dòng được khôi phục chuẩn xác
             if "-----BEGIN PRIVATE KEY-----" in pk and "-----END PRIVATE KEY-----" in pk:
                 lines = [line.strip() for line in pk.splitlines() if line.strip()]
                 pk = "\n".join(lines) + "\n"
-            
             creds_dict["private_key"] = pk
-            
+
+        # Tạo file JSON tạm thời từ secrets để Google Auth đọc trực tiếp không bao giờ lỗi padding PEM
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as temp:
+            json.dump(creds_dict, temp)
+            temp_path = temp.name
+
         scope = ["https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        creds = Credentials.from_service_account_file(temp_path, scopes=scope)
+        
+        # Xóa file tạm sau khi đã nạp xong
+        try:
+            os.remove(temp_path)
+        except Exception:
+            pass
+            
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
         st.error("Loi ket noi Google Drive: " + str(e))
