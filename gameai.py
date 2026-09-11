@@ -26,14 +26,13 @@ if api_key:
     except Exception as e:
         st.error(f"Lỗi khởi tạo Gemini Client: {e}")
 
-# Hàm kết nối Google Sheets tự động (có hiển thị thông báo nếu lỗi)
+# Hàm kết nối Google Sheets tự động
 def get_google_sheet_data():
     try:
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         gc = gspread.authorize(creds)
-        # Mở bảng tính có tên "AI_Trivia_Database" và tab "Questions"
         sh = gc.open("AI_Trivia_Database")
         worksheet = sh.worksheet("Questions")
         return worksheet.get_all_records()
@@ -86,12 +85,10 @@ if "is_correct" not in st.session_state:
 st.title("🧠 AI Trivia Learning App by TDQ")
 st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn, đồng bộ vĩnh viễn với Google Sheets!")
 
-# Kiểm tra API Key và Secrets
 if not api_key:
     st.warning("⚠️ Chưa tìm thấy cấu hình trong Streamlit Secrets!")
     st.stop()
 
-# Nhập chủ đề học tập
 topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Tiếng Anh cơ bản...")
 
 col_a, col_b = st.columns(2)
@@ -127,7 +124,6 @@ if start_btn and topic:
                     "keyword": r.get("Keyword", "")
                 })
         
-        # Nếu kho trên Sheets đã có đủ hoặc gần đủ số lượng yêu cầu, lấy ra dùng luôn!
         if len(cached_questions) >= num_q:
             st.session_state.questions = cached_questions[:num_q]
             st.session_state.current_q = 0
@@ -136,10 +132,10 @@ if start_btn and topic:
             st.session_state.answered = False
             st.session_state.selected_choice = None
             st.session_state.is_correct = None
-            st.success("⚡ Đã tìm thấy và tải nhanh bộ câu hỏi từ kho Google Sheets cá nhân (Không tốn lượt API)!")
+            st.success("⚡ Đã tìm thấy và tải nhanh bộ câu hỏi từ kho Google Sheets cá nhân!")
             st.rerun()
 
-    # BƯỚC 2: Nếu chưa có trong kho, gọi AI tạo mới
+    # BƯỚC 2: Nếu chưa có, gọi AI tạo mới
     with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' và tự động lưu vào Google Sheets..."):
         try:
             prompt = f"""
@@ -168,7 +164,6 @@ if start_btn and topic:
             new_questions = json.loads(raw_text.strip())
             
             if new_questions:
-                # Đẩy ngầm các câu hỏi mới tạo lên Google Sheets để bồi đắp kho dữ liệu
                 rows_to_save = []
                 for q in new_questions:
                     rows_to_save.append([
@@ -196,4 +191,42 @@ if start_btn and topic:
             if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 st.error("⚠️ Hết hạn mức API. Hãy chọn các chủ đề bạn đã từng học để lấy trực tiếp từ Google Sheets nhé!")
             else:
-                st.error(f"Có lỗi xảy ra
+                st.error(f"Có lỗi xảy ra: {e}")
+
+# Tiến hành chơi game
+if st.session_state.game_started and st.session_state.questions:
+    q_list = st.session_state.questions
+    idx = st.session_state.current_q
+    
+    if idx < len(q_list):
+        current_data = q_list[idx]
+        
+        st.divider()
+        st.subheader(f"📌 Câu hỏi {idx + 1} / {len(q_list)}")
+        
+        question_text = current_data["question"]
+        options = current_data["options"]
+        explanation = current_data.get("explanation", "Không có phần giải thích.")
+        keyword = current_data.get("keyword", "").strip()
+        
+        st.markdown(f"### {question_text}")
+        
+        if keyword:
+            formatted_kw = keyword.replace(" ", ",")
+            img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
+            try:
+                st.image(img_source, use_column_width=True, caption=f"🖼️ Hình ảnh minh họa cho: {keyword}")
+            except Exception:
+                pass
+        
+        full_doc_text = f"Câu hỏi {idx + 1}: {question_text}. Các đáp án là: A. {options[0]}, B. {options[1]}, C. {options[2]}, D. {options[3]}"
+        if st.button("🔊 Nghe đọc câu hỏi & đáp án"):
+            speak_text(full_doc_text)
+            
+        st.write("")
+        st.markdown("**Chọn đáp án của bạn:**")
+        
+        for opt in options:
+            if st.button(opt, key=f"btn_{idx}_{opt}", disabled=st.session_state.answered, use_container_width=True):
+                st.session_state.answered = True
+                st.session_state.selected_
