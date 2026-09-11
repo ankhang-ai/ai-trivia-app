@@ -47,17 +47,7 @@ def load_json_from_drive():
     if not service:
         return []
     try:
-        results = service.files().list(
-            q="name='trivia_database.json' and trashed=false",
-            pageSize=1,
-            fields="files(id, name)"
-        ).execute()
-        items = results.get('files', [])
-        
-        if not items:
-            return []
-        
-        file_id = items[0]['id']
+        file_id = st.secrets["gdrive_file_id"]
         request = service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
@@ -70,7 +60,8 @@ def load_json_from_drive():
             return []
         data = json.loads(content)
         return data if isinstance(data, list) else []
-    except Exception:
+    except Exception as e:
+        st.error("Loi doc file tu Drive: " + str(e))
         return []
 
 def save_json_to_drive(new_questions, topic, difficulty):
@@ -78,10 +69,14 @@ def save_json_to_drive(new_questions, topic, difficulty):
     if not service:
         return
     try:
+        file_id = st.secrets["gdrive_file_id"]
+        
+        # Tai du lieu hien tai tren Drive ve
         existing_data = load_json_from_drive()
         if not isinstance(existing_data, list):
             existing_data = []
             
+        # Them cau hoi moi vao danh sach
         for q in new_questions:
             q_record = {
                 "topic": topic.strip().lower(),
@@ -97,26 +92,12 @@ def save_json_to_drive(new_questions, topic, difficulty):
         file_content = json.dumps(existing_data, ensure_ascii=False, indent=2).encode('utf-8')
         media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype='application/json', resumable=True)
         
-        results = service.files().list(
-            q="name='trivia_database.json' and trashed=false",
-            pageSize=1,
-            fields="files(id, name)"
+        # Cap nhat truc tiep vao dung file ID cua ban
+        service.files().update(
+            fileId=file_id,
+            media_body=media
         ).execute()
-        items = results.get('files', [])
         
-        if items:
-            file_id = items[0]['id']
-            service.files().update(
-                fileId=file_id,
-                media_body=media
-            ).execute()
-        else:
-            file_metadata = {'name': 'trivia_database.json'}
-            service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id'
-            ).execute()
         st.toast("Da dong bo file JSON len Google Drive thanh cong!", icon="☁️")
     except Exception as e:
         st.warning("Khong the luu file len Google Drive: " + str(e))
@@ -156,7 +137,7 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 st.title("🧠 AI Trivia Learning App")
-st.markdown("Hoc thong minh qua cau hoi AI, dong bo file JSON qua Google Drive!")
+st.markdown("Hoc thong minh qua cau hoi AI, dong bo file JSON truc tiep qua Google Drive!")
 
 if not api_key:
     st.warning("Chua tim thay GEMINI_API_KEY trong Streamlit Secrets!")
