@@ -28,12 +28,13 @@ def get_drive_service():
     try:
         creds_dict = dict(st.secrets["gcp_service_account"])
         if "private_key" in creds_dict:
-            pk = creds_dict["private_key"]
-            pk = pk.strip().replace("\\n", "\n")
+            pk = str(creds_dict["private_key"])
+            # Xử lý dứt điểm lỗi xuống dòng và padding của PEM
+            pk = pk.replace("\\n", "\n")
             if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
-                pk = "-----BEGIN PRIVATE KEY-----\n" + pk
+                pk = "-----BEGIN PRIVATE KEY-----\n" + pk.strip()
             if not pk.endswith("-----END PRIVATE KEY-----"):
-                pk = pk.strip() + "\n-----END PRIVATE KEY-----"
+                pk = pk.strip() + "\n-----END PRIVATE KEY-----\n"
             creds_dict["private_key"] = pk
             
         scope = ["https://www.googleapis.com/auth/drive"]
