@@ -40,6 +40,7 @@ def get_drive_service():
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         return build('drive', 'v3', credentials=creds)
     except Exception as e:
+        st.error("Loi ket noi Google Drive: " + str(e))
         return None
 
 def load_json_from_drive():
@@ -61,55 +62,26 @@ def load_json_from_drive():
         data = json.loads(content)
         return data if isinstance(data, list) else []
     except Exception as e:
-        st.error("Loi doc file tu Drive: " + str(e))
         return []
 
-def save_json_to_drive(new_questions, topic, difficulty):
+def save_all_questions_to_drive(full_questions_list):
+    """Ghi đè toàn bộ danh sách câu hỏi hiện tại lên Google Drive"""
     service = get_drive_service()
     if not service:
-        return
+        return False
     try:
         file_id = st.secrets["gdrive_file_id"]
-        
-        # Tai du lieu hien tai tren Drive ve
-        existing_data = load_json_from_drive()
-        if not isinstance(existing_data, list):
-            existing_data = []
-            
-        # Them cau hoi moi vao danh sach
-        for q in new_questions:
-            q_record = {
-                "topic": topic.strip().lower(),
-                "difficulty": difficulty,
-                "question": q["question"],
-                "options": q["options"],
-                "answer": q["answer"],
-                "explanation": q.get("explanation", ""),
-                "keyword": q.get("keyword", "")
-            }
-            existing_data.append(q_record)
-            
-        file_content = json.dumps(existing_data, ensure_ascii=False, indent=2).encode('utf-8')
+        file_content = json.dumps(full_questions_list, ensure_ascii=False, indent=2).encode('utf-8')
         media = MediaIoBaseUpload(io.BytesIO(file_content), mimetype='application/json', resumable=True)
         
-        # Cap nhat truc tiep vao dung file ID cua ban
         service.files().update(
             fileId=file_id,
             media_body=media
         ).execute()
-        
-        st.toast("Da dong bo file JSON len Google Drive thanh cong!", icon="☁️")
+        return True
     except Exception as e:
-        st.warning("Khong the luu file len Google Drive: " + str(e))
-
-def get_cached_questions(topic, difficulty):
-    all_data = load_json_from_drive()
-    target_topic = topic.strip().lower()
-    cached = []
-    for r in all_data:
-        if str(r.get("topic", "")).strip().lower() == target_topic and str(r.get("difficulty", "")) == difficulty:
-            cached.append(r)
-    return cached
+        st.error("Loi khi ghi file len Drive: " + str(e))
+        return False
 
 def speak_text(text):
     try:
@@ -137,7 +109,7 @@ if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
 st.title("🧠 AI Trivia Learning App")
-st.markdown("Hoc thong minh qua cau hoi AI, dong bo file JSON truc tiep qua Google Drive!")
+st.markdown("Hoc thong minh qua cau hoi AI, dong bo Google Drive truc tiep!")
 
 if not api_key:
     st.warning("Chua tim thay GEMINI_API_KEY trong Streamlit Secrets!")
@@ -154,26 +126,10 @@ with col_a:
 with col_b:
     num_q = st.number_input("So luong cau hoi:", min_value=1, value=5, step=1)
 
-start_btn = st.button("Bat dau hoc", type="primary")
+start_btn = st.button("Tao cau hoi moi & Bat dau", type="primary")
 
 if start_btn and topic:
-    target_topic = topic.strip().lower()
-    
-    with st.spinner("Dang kiem tra Google Drive..."):
-        cached_questions = get_cached_questions(target_topic, difficulty)
-        
-        if len(cached_questions) >= num_q:
-            st.session_state.questions = cached_questions[:num_q]
-            st.session_state.current_q = 0
-            st.session_state.score = 0
-            st.session_state.game_started = True
-            st.session_state.answered = False
-            st.session_state.selected_choice = None
-            st.session_state.is_correct = None
-            st.success("Da tai nhanh cau hoi tu Google Drive!")
-            st.rerun()
-
-    with st.spinner("AI dang tao cau hoi moi voi gemini-3.6-flash..."):
+    with st.spinner("AI dang tao cau hoi moi với gemini-3.6-flash..."):
         try:
             prompt = (
                 f"Tao {num_q} cau hoi trac nghiem ve chu de: '{topic}'. "
@@ -181,6 +137,8 @@ if start_btn and topic:
                 "Chi tra ve mang JSON thuan tuy (khong markdown, khong boc trong ```json), dung cau truc: "
                 "["
                 "{"
+                f'"topic": "{topic.strip().lower()}", '
+                f'"difficulty": "{difficulty}", '
                 '"question": "Cau hoi?", '
                 '"options": ["A", "B", "C", "D"], '
                 '"answer": "Dap an chinh xac giong het 1 option", '
@@ -203,7 +161,16 @@ if start_btn and topic:
             new_questions = json.loads(raw_text.strip())
             
             if new_questions:
-                save_json_to_drive(new_questions, topic, difficulty)
+                # Tải dữ liệu cũ trên Drive về, gộp câu hỏi mới vào
+                existing_data = load_json_from_drive()
+                if not isinstance(existing_data, list):
+                    existing_data = []
+                
+                for q in new_questions:
+                    existing_data.append(q)
+                
+                # Lưu đè toàn bộ lên Google Drive
+                success = save_all_questions_to_drive(existing_data)
                 
                 st.session_state.questions = new_questions
                 st.session_state.current_q = 0
@@ -212,14 +179,14 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("Da tao va dong bo file len Google Drive thanh cong!")
+                
+                if success:
+                    st.success("Đã tạo câu hỏi và tự động đồng bộ lên Google Drive thành công!")
+                else:
+                    st.warning("Đã tạo câu hỏi nhưng chưa đồng bộ được lên Drive (kiểm tra lại quyền).")
                 st.rerun()
         except Exception as e:
-            err_msg = str(e)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                st.warning("Da het han muc API. Vui long thu lai sau!")
-            else:
-                st.error("Loi xay ra: " + err_msg)
+            st.error("Loi xay ra: " + str(e))
 
 if st.session_state.game_started and st.session_state.questions:
     q_list = st.session_state.questions
@@ -246,9 +213,8 @@ if st.session_state.game_started and st.session_state.questions:
             except Exception:
                 pass
         
-        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_text
         if st.button("Nghe doc cau hoi"):
-            speak_text(full_doc_text)
+            speak_text("Cau hoi " + str(idx + 1) + ": " + question_text)
             
         st.write("")
         st.markdown("**Chon dap an:**")
@@ -294,6 +260,18 @@ if st.session_state.game_started and st.session_state.questions:
         st.success("Chuc mung ban da hoan thanh bo cau hoi!")
         st.balloons()
         st.metric(label="Tong so diem", value=str(st.session_state.score) + " / " + str(len(q_list)))
+        
+        # Nút đồng bộ thủ công để chắc chắn dữ liệu đẩy lên mây
+        if st.button("🔄 Đồng bộ dữ liệu hiện tại lên Google Drive ngay"):
+            all_drive_data = load_json_from_drive()
+            if not isinstance(all_drive_data, list):
+                all_drive_data = []
+            for q in q_list:
+                all_drive_data.append(q)
+            if save_all_questions_to_drive(all_drive_data):
+                st.success("Đã đẩy dữ liệu lên Google Drive thành công!")
+            else:
+                st.error("Lỗi đồng bộ. Hãy kiểm tra lại file ID hoặc quyền.")
         
         if st.button("Choi lai chu de moi"):
             st.session_state.game_started = False
