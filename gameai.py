@@ -187,4 +187,47 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("✨ Đã tạo mới câu hỏi và tự động đồng bộ
+                st.success("✨ Đã tạo mới câu hỏi và tự động đồng bộ thành công vào Google Sheets!")
+                st.rerun()
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                st.error("⚠️ Hết hạn mức API. Hãy chọn các chủ đề bạn đã từng học để lấy trực tiếp từ Google Sheets nhé!")
+            else:
+                st.error(f"Có lỗi xảy ra: {e}")
+
+# Tiến hành chơi game
+if st.session_state.game_started and st.session_state.questions:
+    q_list = st.session_state.questions
+    idx = st.session_state.current_q
+    
+    if idx < len(q_list):
+        current_data = q_list[idx]
+        
+        st.divider()
+        st.subheader(f"📌 Câu hỏi {idx + 1} / {len(q_list)}")
+        
+        question_text = current_data["question"]
+        options = current_data["options"]
+        explanation = current_data.get("explanation", "Không có phần giải thích.")
+        keyword = current_data.get("keyword", "").strip()
+        
+        st.markdown(f"### {question_text}")
+        
+        if keyword:
+            formatted_kw = keyword.replace(" ", ",")
+            img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
+            try:
+                st.image(img_source, caption=f"🖼️ Hình ảnh minh họa cho: {keyword}")
+            except Exception:
+                pass
+        
+        full_doc_text = f"Câu hỏi {idx + 1}: {question_text}. Các đáp án là: A. {options[0]}, B. {options[1]}, C. {options[2]}, D. {options[3]}"
+        if st.button("🔊 Nghe đọc câu hỏi & đáp án"):
+            speak_text(full_doc_text)
+            
+        st.write("")
+        st.markdown("**Chọn đáp án của bạn:**")
+        
+        for opt in options:
+            if st.button(opt, key=f"btn_{idx}_{opt}", disabled=st.session_state.answered, use_container_width=True
