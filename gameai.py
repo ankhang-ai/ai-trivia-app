@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-# Khởi tạo client Gemini
+# Khởi tạo client Gemini (Dùng model mới nhất theo yêu cầu hệ thống)
 client = None
 if api_key:
     try:
@@ -26,11 +26,15 @@ if api_key:
     except Exception as e:
         st.error(f"Lỗi khởi tạo Gemini Client: {e}")
 
-# Hàm kết nối Google Sheets tự động (Đã chuẩn hóa private_key chống lỗi PEM)
+# Hàm kết nối Google Sheets (Đã xử lý chuẩn xác lỗi PEM key padding)
 def get_gcp_credentials():
     creds_dict = dict(st.secrets["gcp_service_account"])
     if "private_key" in creds_dict:
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        pk = creds_dict["private_key"].strip()
+        # Xử lý triệt để dấu xuống dòng bị lỗi escape
+        if "\\n" in pk and "\n" not in pk:
+            pk = pk.replace("\\n", "\n")
+        creds_dict["private_key"] = pk
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     return Credentials.from_service_account_info(creds_dict, scopes=scope)
 
@@ -138,7 +142,7 @@ if start_btn and topic:
             st.success("⚡ Đã tìm thấy và tải nhanh bộ câu hỏi từ kho Google Sheets cá nhân!")
             st.rerun()
 
-    # BƯỚC 2: Nếu chưa có, gọi AI tạo mới (dùng gemini-2.0-flash chuẩn xác)
+    # BƯỚC 2: Nếu chưa có, gọi AI tạo mới (Sử dụng gemini-3.6-flash chuẩn xác)
     with st.spinner(f"AI đang soạn bộ {num_q} câu hỏi mức độ '{difficulty}' và tự động lưu vào Google Sheets..."):
         try:
             prompt = f"""
@@ -154,7 +158,7 @@ if start_btn and topic:
             }}
             """
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-3.6-flash",
                 contents=prompt,
             )
             
@@ -194,12 +198,4 @@ if start_btn and topic:
             if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 st.error("⚠️ Hết hạn mức API. Hãy chọn các chủ đề bạn đã từng học để lấy trực tiếp từ Google Sheets nhé!")
             else:
-                st.error(f"Có lỗi xảy ra: {e}")
-
-# Tiến hành chơi game
-if st.session_state.game_started and st.session_state.questions:
-    q_list = st.session_state.questions
-    idx = st.session_state.current_q
-    
-    if idx < len(q_list):
-        current_data = q
+                st.error(f"Có lỗi xảy ra:
