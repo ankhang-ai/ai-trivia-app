@@ -7,10 +7,8 @@ import urllib.parse
 import gspread
 from google.oauth2.service_account import Credentials
 
-# Cấu hình trang Streamlit
 st.set_page_config(page_title="AI Trivia Learning App", page_icon="🧠", layout="centered")
 
-# Lấy API Key an toàn từ st.secrets
 api_key = None
 try:
     if "GEMINI_API_KEY" in st.secrets:
@@ -18,15 +16,13 @@ try:
 except Exception:
     pass
 
-# Khởi tạo client Gemini
 client = None
 if api_key:
     try:
         client = genai.Client(api_key=api_key)
     except Exception as e:
-        st.error("Lỗi khởi tạo Gemini Client: " + str(e))
+        st.error("Loi khoi tao Gemini: " + str(e))
 
-# Hàm kết nối Google Sheets
 def get_gcp_credentials():
     creds_dict = dict(st.secrets["gcp_service_account"])
     if "private_key" in creds_dict:
@@ -45,7 +41,7 @@ def get_google_sheet_data():
         worksheet = sh.worksheet("Questions")
         return worksheet.get_all_records()
     except Exception as e:
-        st.error("Lỗi đọc Google Sheets: " + str(e))
+        st.error("Loi doc Google Sheets: " + str(e))
         return []
 
 def append_to_google_sheet(new_rows):
@@ -56,11 +52,10 @@ def append_to_google_sheet(new_rows):
         worksheet = sh.worksheet("Questions")
         for row in new_rows:
             worksheet.append_row(row)
-        st.toast("✨ Đã đồng bộ dữ liệu vào Google Sheets thành công!", icon="📊")
+        st.toast("Da dong bo du lieu vao Google Sheets!", icon="📊")
     except Exception as e:
-        st.error("Lỗi ghi Google Sheets: " + str(e))
+        st.error("Loi ghi Google Sheets: " + str(e))
 
-# Hàm chuyển văn bản thành giọng nói tiếng Việt
 def speak_text(text):
     try:
         tts = gTTS(text=text, lang="vi")
@@ -71,7 +66,6 @@ def speak_text(text):
     except Exception as e:
         pass
 
-# Khởi tạo trạng thái game
 if "questions" not in st.session_state:
     st.session_state.questions = []
 if "current_q" not in st.session_state:
@@ -87,32 +81,30 @@ if "selected_choice" not in st.session_state:
 if "is_correct" not in st.session_state:
     st.session_state.is_correct = None
 
-# Giao diện tiêu đề
-st.title("🧠 AI Trivia Learning App by TDQ")
-st.markdown("Học kiến thức thông minh qua câu hỏi do AI tự động biên soạn, đồng bộ vĩnh viễn với Google Sheets!")
+st.title("🧠 AI Trivia Learning App")
+st.markdown("Học thông minh qua câu hỏi AI, đồng bộ với Google Sheets!")
 
 if not api_key:
-    st.warning("⚠️ Chưa tìm thấy cấu hình trong Streamlit Secrets!")
+    st.warning("Chua tim thay GEMINI_API_KEY trong Streamlit Secrets!")
     st.stop()
 
-topic = st.text_input("Nhập chủ đề bạn muốn học:", placeholder="Ví dụ: Quốc kỳ các nước, Lịch sử Việt Nam, Tiếng Anh cơ bản...")
+topic = st.text_input("Nhap chu de ban muon hoc:", placeholder="Vi du: Lich su Viet Nam, Tieng Anh...")
 
 col_a, col_b = st.columns(2)
 with col_a:
     difficulty = st.selectbox(
-        "Chọn cấp độ khó:",
-        ["Dễ (Cơ bản, phù hợp cho trẻ em/mới học)", "Trung bình (Hiểu biết chung)", "Khó (Nâng cao, chuyên sâu, đánh đố)"]
+        "Chon cap do kho:",
+        ["De (Co ban)", "Trung binh (Hieu biet chung)", "Kho (Nang cao, chuyen sau)"]
     )
 with col_b:
-    num_q = st.number_input("Số lượng câu hỏi:", min_value=1, value=5, step=1)
+    num_q = st.number_input("So luong cau hoi:", min_value=1, value=5, step=1)
 
-start_btn = st.button("🚀 Bắt đầu học", type="primary")
+start_btn = st.button("Bat dau hoc", type="primary")
 
 if start_btn and topic:
     target_topic = topic.strip().lower()
     
-    # BƯỚC 1: Lục kho cũ từ Google Sheets
-    with st.spinner("Đang kiểm tra kho dữ liệu trên Google Sheets..."):
+    with st.spinner("Dang kiem tra kho du lieu Google Sheets..."):
         all_rows = get_google_sheet_data()
         cached_questions = []
         for r in all_rows:
@@ -138,23 +130,24 @@ if start_btn and topic:
             st.session_state.answered = False
             st.session_state.selected_choice = None
             st.session_state.is_correct = None
-            st.success("⚡ Đã tìm thấy và tải nhanh bộ câu hỏi từ kho Google Sheets cá nhân!")
+            st.success("Da tai nhanh bo cau hoi tu Google Sheets!")
             st.rerun()
 
-    # BƯỚC 2: Nếu chưa có, gọi AI tạo mới (Sử dụng gemini-3.6-flash chuẩn xác)
-    with st.spinner("AI đang soạn bộ câu hỏi và tự động lưu vào Google Sheets..."):
+    with st.spinner("AI dang soan bo cau hoi moi..."):
         try:
             prompt = (
-                f"Tạo {num_q} câu hỏi trắc nghiệm về chủ đề: '{topic}'. "
-                f"Cấp độ khó của câu hỏi: {difficulty}. "
-                "Đầu ra phải là một mảng JSON thuần túy (không chứa markdown nào khác ngoài JSON, không bọc trong ```json), mỗi phần tử có cấu trúc: "
+                f"Tao {num_q} cau hoi trac nghiem ve chu de: '{topic}'. "
+                f"Cap do: {difficulty}. "
+                "Chi tra ve mang JSON thuan tuy (khong markdown, khong boc trong ```json), dung cau truc: "
+                "["
                 "{"
-                '"question": "Nội dung câu hỏi?", '
-                '"options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], '
-                '"answer": "Đáp án chính xác hoàn toàn giống hệt một trong các options trên", '
-                '"explanation": "Giải thích chi tiết vì sao đáp án này lại đúng.", '
-                '"keyword": "Từ khóa tiếng Anh ngắn gọn nếu cần ảnh minh họa, nếu không để trống \\"\\"." '
+                '"question": "Cau hoi?", '
+                '"options": ["A", "B", "C", "D"], '
+                '"answer": "Dap an chinh xac giong het 1 option", '
+                '"explanation": "Giai thich chi tiet", '
+                '"keyword": "Tu khoa tieng Anh"'
                 "}"
+                "]"
             )
             response = client.models.generate_content(
                 model="gemini-3.6-flash",
@@ -190,4 +183,10 @@ if start_btn and topic:
                 st.session_state.answered = False
                 st.session_state.selected_choice = None
                 st.session_state.is_correct = None
-                st.success("✨ Đã tạo mới câu hỏi và tự động đồng
+                st.success("Da tao va luu bo cau hoi vao Google Sheets!")
+                st.rerun()
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                st.warning("Da het han muc API. Vui long thu lai sau!")
+            else:
