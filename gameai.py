@@ -26,10 +26,15 @@ if api_key:
 def get_gcp_credentials():
     creds_dict = dict(st.secrets["gcp_service_account"])
     if "private_key" in creds_dict:
-        pk = creds_dict["private_key"].strip()
-        if "\\n" in pk and "\n" not in pk:
-            pk = pk.replace("\\n", "\n")
+        pk = creds_dict["private_key"]
+        # Xử lý chuẩn hóa định dạng private_key cho Streamlit Secrets
+        pk = pk.replace("\\n", "\n")
+        if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
+            pk = "-----BEGIN PRIVATE KEY-----\n" + pk
+        if not pk.endswith("-----END PRIVATE KEY-----"):
+            pk = pk.strip() + "\n-----END PRIVATE KEY-----"
         creds_dict["private_key"] = pk
+        
     scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     return Credentials.from_service_account_info(creds_dict, scopes=scope)
 
@@ -133,7 +138,7 @@ if start_btn and topic:
             st.success("Da tai nhanh bo cau hoi tu Google Sheets!")
             st.rerun()
 
-    with st.spinner("AI dang soan bo cau hoi moi..."):
+    with st.spinner("AI đang soạn bộ câu hỏi mới với gemini-3.6-flash..."):
         try:
             prompt = (
                 f"Tao {num_q} cau hoi trac nghiem ve chu de: '{topic}'. "
@@ -150,7 +155,7 @@ if start_btn and topic:
                 "]"
             )
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
                 contents=prompt,
             )
             
@@ -217,60 +222,4 @@ if st.session_state.game_started and st.session_state.questions:
             except Exception:
                 pass
         
-        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_text
-        if st.button("Nghe doc cau hoi"):
-            speak_text(full_doc_text)
-            
-        st.write("")
-        st.markdown("**Chon dap an:**")
-        
-        for opt in options:
-            if st.button(opt, key="btn_" + str(idx) + "_" + opt, disabled=st.session_state.answered, use_container_width=True):
-                st.session_state.answered = True
-                st.session_state.selected_choice = opt
-                
-                if opt == current_data["answer"]:
-                    st.session_state.score += 1
-                    st.session_state.is_correct = True
-                else:
-                    st.session_state.is_correct = False
-                st.rerun()
-        
-        if st.session_state.answered:
-            st.write("")
-            if st.session_state.is_correct:
-                st.success("Chinh xac! Ban da chon dung.")
-            else:
-                st.error("Chua chinh xac! Dap an dung la: " + current_data['answer'])
-            
-            st.info("Giai thich:\n\n" + explanation)
-            
-            search_query = urllib.parse.quote(topic + " " + question_text)
-            google_search_url = "[https://www.google.com/search?q=](https://www.google.com/search?q=)" + search_query
-            st.link_button("Tim hieu them tren Google", google_search_url, use_container_width=True)
-            
-            st.write("")
-            if idx < len(q_list) - 1:
-                if st.button("Chuyen sang cau tiep theo", type="primary", use_container_width=True):
-                    st.session_state.current_q += 1
-                    st.session_state.answered = False
-                    st.session_state.selected_choice = None
-                    st.session_state.is_correct = None
-                    st.rerun()
-            else:
-                if st.button("Xem ket qua chung cuoc", type="primary", use_container_width=True):
-                    st.session_state.current_q += 1
-                    st.rerun()
-    else:
-        st.success("Chuc mung ban da hoan thanh bo cau hoi!")
-        st.balloons()
-        st.metric(label="Tong so diem cua ban", value=str(st.session_state.score) + " / " + str(len(q_list)))
-        
-        if st.button("Choi lai chu de moi"):
-            st.session_state.game_started = False
-            st.session_state.questions = []
-            st.session_state.current_q = 0
-            st.session_state.score = 0
-            st.session_state.answered = False
-            st.session_state.is_correct = None
-            st.rerun()
+        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_
