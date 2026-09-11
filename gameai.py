@@ -202,20 +202,4 @@ if st.session_state.game_started and st.session_state.questions:
     idx = st.session_state.current_q
     
     if idx < len(q_list):
-        current_data = q_list[idx]
-        
-        st.divider()
-        st.subheader(f"📌 Câu hỏi {idx + 1} / {len(q_list)}")
-        
-        question_text = current_data["question"]
-        options = current_data["options"]
-        explanation = current_data.get("explanation", "Không có phần giải thích.")
-        keyword = current_data.get("keyword", "").strip()
-        
-        st.markdown(f"### {question_text}")
-        
-        if keyword:
-            formatted_kw = keyword.replace(" ", ",")
-            img_source = f"[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?{formatted_kw}"
-            try:
-                st.image(img_source, caption=f"🖼️ Hình ảnh
+        current_data = q
