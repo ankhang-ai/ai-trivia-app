@@ -27,8 +27,7 @@ def get_gcp_credentials():
     try:
         creds_dict = dict(st.secrets["gcp_service_account"])
         if "private_key" in creds_dict:
-            pk = creds_dict[“private_key”]
-            # Xử lý chuẩn hóa triệt để chuỗi khóa PEM để tránh lỗi padding
+            pk = creds_dict["private_key"]
             pk = pk.strip().replace("\\n", "\n")
             if not pk.startswith("-----BEGIN PRIVATE KEY-----"):
                 pk = "-----BEGIN PRIVATE KEY-----\n" + pk
@@ -189,51 +188,4 @@ if start_btn and topic:
                 
                 st.session_state.questions = new_questions
                 st.session_state.current_q = 0
-                st.session_state.score = 0
-                st.session_state.game_started = True
-                st.session_state.answered = False
-                st.session_state.selected_choice = None
-                st.session_state.is_correct = None
-                st.success("Da tao va dong bo cau hoi thanh cong!")
-                st.rerun()
-        except Exception as e:
-            err_msg = str(e)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                st.warning("Da het han muc API. Vui long thu lai sau!")
-            else:
-                st.error("Loi xay ra: " + err_msg)
-
-if st.session_state.game_started and st.session_state.questions:
-    q_list = st.session_state.questions
-    idx = st.session_state.current_q
-    
-    if idx < len(q_list):
-        current_data = q_list[idx]
-        
-        st.divider()
-        st.subheader("Cau hoi " + str(idx + 1) + " / " + str(len(q_list)))
-        
-        question_text = current_data["question"]
-        options = current_data["options"]
-        explanation = current_data.get("explanation", "Khong co giai thich.")
-        keyword = current_data.get("keyword", "").strip()
-        
-        st.markdown("### " + question_text)
-        
-        if keyword:
-            formatted_kw = keyword.replace(" ", ",")
-            img_source = "[https://source.unsplash.com/featured/800x400/](https://source.unsplash.com/featured/800x400/)?" + formatted_kw
-            try:
-                st.image(img_source, caption="Hinh anh minh hoa: " + keyword)
-            except Exception:
-                pass
-        
-        full_doc_text = "Cau hoi " + str(idx + 1) + ": " + question_text
-        if st.button("Nghe doc cau hoi"):
-            speak_text(full_doc_text)
-            
-        st.write("")
-        st.markdown("**Chon dap an:**")
-        
-        for opt in options:
-            if st.button(opt
+                st.session_state.
